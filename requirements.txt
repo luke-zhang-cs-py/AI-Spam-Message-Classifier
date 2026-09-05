@@ -1,3 +1,6 @@
 scikit-learn>=1.3
 pandas>=2.0
 joblib>=1.3
+
+# Only needed for the web UI (app.py); the CLI runs without it.
+Flask>=2.3

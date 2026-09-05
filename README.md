@@ -3,7 +3,14 @@
 A self-contained text classifier that sorts SMS-style messages into **spam**
 or **ham** (not spam). Everything — the labeled dataset, preprocessing, model
 training, evaluation, and the CLI — lives in one file,
-`spam_classifier_all_in_one.py`.
+`spam_classifier_all_in_one.py`. `app.py` adds a browser UI on top of it
+without changing the model.
+
+| File | Purpose |
+|---|---|
+| `spam_classifier_all_in_one.py` | dataset, training, evaluation, CLI |
+| `app.py` | Flask web UI + per-word explanations |
+| `templates/`, `static/` | the page, styling, and browser wiring |
 
 ## How it works
 
@@ -39,6 +46,35 @@ python spam_classifier_all_in_one.py --interactive
 # Force retraining even if a saved model exists
 python spam_classifier_all_in_one.py --classify "..." --retrain
 ```
+
+### Web UI
+
+```bash
+python app.py
+# then open http://127.0.0.1:5002
+```
+
+Paste a message and it shows the verdict, the confidence, and — the part the
+CLI cannot give you — **which words drove the decision**, colour-coded by
+whether each pushed towards spam or ham. Paste several lines and hit
+*Classify each line* for a batch table.
+
+Both classifiers reduce to a linear score over TF-IDF features, so a token's
+contribution is its TF-IDF value times the model's weight for it. The two
+models store that weight in different places (`coef_` for Logistic
+Regression, the difference between the two rows of `feature_log_prob_` for
+Naive Bayes), and `token_weights()` in `app.py` handles both.
+
+It binds to `127.0.0.1`. The endpoints are unauthenticated, and messages
+pasted in for testing are the sort of thing you would rather not expose.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /` | the page |
+| `POST /api/classify` | `{message}` → verdict, confidence, token weights |
+| `POST /api/batch` | `{messages: [...]}` → one verdict per line (cap 200) |
+| `POST /api/retrain` | retrain from the embedded dataset and reload |
+| `GET /api/model` | which model is loaded, and its scores |
 
 Or import it:
 

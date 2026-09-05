@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spam Classifier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Spam Classifier<em>TF-IDF + scikit-learn</em></h1>
+    <div class="sub">Paste a message to see whether the model calls it spam &mdash; and
+      which words drove that call. Runs entirely on this machine; nothing is sent anywhere.</div>
+  </header>
+
+  <div class="board">
+
+    <div class="main">
+      <div class="section">
+        <h2>Message</h2>
+        <textarea id="input" rows="5" placeholder="Paste a message&hellip;"></textarea>
+        <div class="btnrow">
+          <button id="classifyBtn">Classify</button>
+          <button class="secondary" id="batchBtn">Classify each line</button>
+          <button class="secondary" id="clearBtn">Clear</button>
+        </div>
+        <div class="err" id="err" style="display:none;"></div>
+        <div class="hint">Tip: paste several messages on separate lines and use
+          <b>Classify each line</b>.</div>
+      </div>
+
+      <div class="section" id="resultCard" style="display:none;">
+        <h2>Verdict</h2>
+        <div class="verdict">
+          <span class="badge" id="badge">&mdash;</span>
+          <div class="confwrap">
+            <div class="row"><span class="label">Confidence</span>
+              <span class="val" id="confVal">&mdash;</span></div>
+            <div class="bar"><div class="fill" id="confFill"></div></div>
+          </div>
+        </div>
+
+        <div class="stat"><span>Recognised words</span><b id="knownTokens">&mdash;</b></div>
+        <div class="stat"><span>After cleaning</span><b class="cleaned" id="cleaned">&mdash;</b></div>
+
+        <h2 style="margin-top:18px;">What drove it</h2>
+        <div class="tokens" id="tokens"></div>
+        <div class="legendrow">
+          <span><i class="sw spam"></i>pushes spam</span>
+          <span><i class="sw ham"></i>pushes ham</span>
+        </div>
+        <div class="note" id="tokenNote"></div>
+      </div>
+
+      <div class="section" id="batchCard" style="display:none;">
+        <h2>Batch results</h2>
+        <div class="stat"><span>Total</span><b id="bTotal">&mdash;</b></div>
+        <div class="stat"><span>Spam / Ham</span><b id="bSplit">&mdash;</b></div>
+        <table class="batch" id="batchTable"></table>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="section">
+        <h2>Model</h2>
+        <div class="stat"><span>Classifier</span><b id="mName">&mdash;</b></div>
+        <div class="stat"><span>Dataset</span><b id="mData">&mdash;</b></div>
+        <div class="stat"><span>Accuracy</span><b id="mAcc">&mdash;</b></div>
+        <div class="stat"><span>Precision</span><b id="mPrec">&mdash;</b></div>
+        <div class="stat"><span>Recall</span><b id="mRec">&mdash;</b></div>
+        <div class="stat"><span>F1</span><b id="mF1">&mdash;</b></div>
+        <button class="secondary" id="retrainBtn">Retrain</button>
+        <div class="note" id="mNote"></div>
+      </div>
+
+      <div class="section">
+        <h2>Try one</h2>
+        <ul class="samples" id="samples"></ul>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>Trained on 81 embedded sample messages, so the scores above describe a toy
+    dataset rather than real-world performance &mdash; a 25% split is only 21 test
+    messages. Swap in a real corpus (e.g. the UCI SMS Spam Collection) before trusting
+    these numbers.</footer>
+
+</div>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
