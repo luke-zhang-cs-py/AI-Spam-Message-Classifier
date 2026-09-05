@@ -40,6 +40,8 @@ import sys
 import string
 import argparse
 
+import os
+
 import joblib
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -55,8 +57,13 @@ from sklearn.metrics import (
     classification_report,
 )
 
-MODEL_PATH = "spam_model.joblib"
-VECTORIZER_PATH = "vectorizer.joblib"
+# Resolved against this file, not the working directory. They used to be
+# bare relative names, which meant the artifacts landed wherever you happened
+# to be standing when you ran the script -- and app.py compensated by calling
+# os.chdir() at import time, a process-wide side effect of an import.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(_HERE, "spam_model.joblib")
+VECTORIZER_PATH = os.path.join(_HERE, "vectorizer.joblib")
 
 # ---------------------------------------------------------------------------
 # Embedded dataset (originally dataset.csv) — 81 labeled sample messages

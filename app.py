@@ -24,20 +24,23 @@ Binds to 127.0.0.1. Nothing here is authenticated, and messages people paste
 in to test are exactly the kind of thing you would rather not expose.
 """
 
-import os
 import threading
 
+import numpy as np
 from flask import Flask, jsonify, render_template, request
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-os.chdir(BASE_DIR)  # MODEL_PATH and VECTORIZER_PATH are relative
-
-import numpy as np                              # noqa: E402
-import spam_classifier_all_in_one as clf        # noqa: E402
+import spam_classifier_all_in_one as clf
 
 app = Flask(__name__)
 
-_state = {"model": None, "vectorizer": None, "name": None, "metrics": None}
+# One message big enough to be a real one and small enough not to be a
+# weapon. Cleaning and vectorising is linear in the text, and a batch of
+# 200 uncapped messages was several hundred megabytes of work per request.
+MAX_MESSAGE_CHARS = 20_000
+MAX_BATCH = 200
+
+_state = {"model": None, "vectorizer": None, "name": None,
+          "metrics": None, "datasetSize": None}
 _lock = threading.Lock()
 
 
@@ -50,25 +53,38 @@ def model_display_name(model):
 
 
 def ensure_model(force_retrain=False):
-    """Load the saved artifacts, training them first if they are missing."""
+    """Load the saved artifacts, training them first if they are missing.
+
+    Held for the whole operation rather than released between the check and
+    the work. Two first requests arriving together both used to see an empty
+    cache, and both went off and trained a model.
+    """
     with _lock:
         if _state["model"] is not None and not force_retrain:
             return _state["model"], _state["vectorizer"]
 
-    model, vectorizer = (None, None) if force_retrain else clf.load_artifacts()
+        model, vectorizer = (None, None) if force_retrain else clf.load_artifacts()
 
-    metrics = None
-    if model is None or vectorizer is None:
         df = clf.load_data()
-        model, vectorizer = clf.train_and_evaluate(df)
-        clf.save_model(model, vectorizer)
-        metrics = evaluate(df, model, vectorizer)
+        if model is None or vectorizer is None:
+            model, vectorizer = clf.train_and_evaluate(df)
+            clf.save_model(model, vectorizer)
 
-    with _lock:
+        # Scored whether it was just trained or loaded from disk. This used to
+        # run only on the training path: the .joblib artifacts are gitignored,
+        # so the first run after a clone trained a model and showed its scores,
+        # and every restart afterwards loaded that model and showed nothing --
+        # a metric that disappears is worse than one that was never there. The
+        # page even had a line explaining it away as inherent ("a model loaded
+        # from disk carries no metrics with it"). It is not: evaluate()
+        # re-scores against the same fixed split the trainer used. The one
+        # assumption is that the artifacts were trained on this dataset; swap
+        # dataset.csv without retraining and the split moves under them, which
+        # is what the retrain button is for.
         _state.update(model=model, vectorizer=vectorizer,
-                      name=model_display_name(model))
-        if metrics:
-            _state["metrics"] = metrics
+                      name=model_display_name(model),
+                      metrics=evaluate(df, model, vectorizer),
+                      datasetSize=int(len(df)))
     return model, vectorizer
 
 
@@ -169,21 +185,28 @@ def index():
 
 @app.route("/api/model")
 def api_model():
-    model, _ = ensure_model()
+    """What is loaded and how well it scores.
+
+    datasetSize comes from the cached state rather than re-reading and
+    re-parsing the CSV, which is what this did on every single request.
+    """
+    ensure_model()
     with _lock:
-        return jsonify({
-            "name": _state["name"],
-            "metrics": _state["metrics"],
-            "datasetSize": int(len(clf.load_data())),
-        })
+        return jsonify({"name": _state["name"], "metrics": _state["metrics"],
+                        "datasetSize": _state["datasetSize"]})
 
 
 @app.route("/api/classify", methods=["POST"])
 def api_classify():
     body = request.get_json(force=True, silent=True) or {}
-    message = (body.get("message") or "").strip()
-    if not message:
+    message = body.get("message")
+    if not isinstance(message, str) or not message.strip():
         return jsonify({"ok": False, "error": "Type a message first."}), 400
+    message = message.strip()
+    if len(message) > MAX_MESSAGE_CHARS:
+        return jsonify({"ok": False,
+                        "error": f"Messages are capped at {MAX_MESSAGE_CHARS:,} "
+                                 f"characters."}), 400
 
     model, vectorizer = ensure_model()
     return jsonify({"ok": True, **classify(message, model, vectorizer)})
@@ -192,11 +215,29 @@ def api_classify():
 @app.route("/api/batch", methods=["POST"])
 def api_batch():
     body = request.get_json(force=True, silent=True) or {}
-    messages = [m.strip() for m in (body.get("messages") or []) if m and m.strip()]
+    raw = body.get("messages")
+
+    # A list, and a list of strings. An int in here used to raise
+    # AttributeError inside the comprehension and come back as a 500, and a
+    # bare string was iterated character by character -- "free money" was
+    # cheerfully classified as nine separate one-letter messages.
+    if not isinstance(raw, list):
+        return jsonify({"ok": False,
+                        "error": "'messages' must be a list of strings."}), 400
+    if any(not isinstance(m, str) for m in raw if m is not None):
+        return jsonify({"ok": False,
+                        "error": "Every message must be a string."}), 400
+
+    messages = [m.strip() for m in raw if isinstance(m, str) and m.strip()]
     if not messages:
         return jsonify({"ok": False, "error": "No messages to classify."}), 400
-    if len(messages) > 200:
-        return jsonify({"ok": False, "error": "Cap is 200 messages at a time."}), 400
+    if len(messages) > MAX_BATCH:
+        return jsonify({"ok": False,
+                        "error": f"Cap is {MAX_BATCH} messages at a time."}), 400
+    if any(len(m) > MAX_MESSAGE_CHARS for m in messages):
+        return jsonify({"ok": False,
+                        "error": f"Messages are capped at {MAX_MESSAGE_CHARS:,} "
+                                 f"characters."}), 400
 
     model, vectorizer = ensure_model()
     results = [classify(m, model, vectorizer) for m in messages]

@@ -117,9 +117,13 @@ function renderModel(d) {
   $('mPrec').textContent = m ? m.precision : '—';
   $('mRec').textContent = m ? m.recall : '—';
   $('mF1').textContent = m ? m.f1 : '—';
+  // Every model reports scores now, loaded or freshly trained. This used to
+  // read "scores appear after a retrain", which explained a bug rather than
+  // describing a limitation: the evaluation runs against a fixed split, so a
+  // model off the disk can be scored exactly as well as a new one.
   $('mNote').textContent = m
     ? `Scored on a held-out split of ${m.testSize} messages.`
-    : 'Scores appear after a retrain — a model loaded from disk carries no metrics with it.';
+    : 'No scores available.';
 }
 
 async function loadModel() {
