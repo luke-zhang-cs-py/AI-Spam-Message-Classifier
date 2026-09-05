@@ -96,8 +96,11 @@ def evaluate(df, model, vectorizer):
 
     X = df["clean_text"]
     y = df["label"].map({"ham": 0, "spam": 1})
+    # clf's constants, not a second copy of the numbers: the quarter this
+    # scores against is only held-out data if it is the same quarter the
+    # trainer held out.
     _, X_test, _, y_test = train_test_split(
-        X, y, test_size=0.25, random_state=42, stratify=y)
+        X, y, test_size=clf.TEST_SIZE, random_state=clf.RANDOM_STATE, stratify=y)
 
     preds = model.predict(vectorizer.transform(X_test))
     return {
@@ -162,7 +165,10 @@ def classify(message, model, vectorizer):
 
     confidence = None
     if hasattr(model, "predict_proba"):
-        confidence = round(float(model.predict_proba(vec)[0][pred]), 4)
+        # By class order, not by label value -- see predict_message in
+        # spam_classifier_all_in_one for why they are not the same thing.
+        index = list(model.classes_).index(pred)
+        confidence = round(float(model.predict_proba(vec)[0][index]), 4)
 
     return {
         "message": message,
@@ -212,32 +218,42 @@ def api_classify():
     return jsonify({"ok": True, **classify(message, model, vectorizer)})
 
 
-@app.route("/api/batch", methods=["POST"])
-def api_batch():
-    body = request.get_json(force=True, silent=True) or {}
-    raw = body.get("messages")
+def clean_batch(raw):
+    """The usable messages out of a request body, or a ValueError saying why.
 
-    # A list, and a list of strings. An int in here used to raise
-    # AttributeError inside the comprehension and come back as a 500, and a
-    # bare string was iterated character by character -- "free money" was
-    # cheerfully classified as nine separate one-letter messages.
+    Pulled out of the handler, which had grown six validate-and-return pairs
+    wrapped around three lines of actual work. Each rule is here because
+    something got through without it:
+
+    * not a list -- a bare string was iterated character by character, so
+      {"messages": "free money"} came back 200 with a nine-message summary;
+    * not all strings -- an int raised AttributeError inside the
+      comprehension and came back as a 500;
+    * length -- cleaning and vectorising is linear in the text, and 200
+      uncapped messages is hundreds of megabytes of work in one request.
+    """
     if not isinstance(raw, list):
-        return jsonify({"ok": False,
-                        "error": "'messages' must be a list of strings."}), 400
+        raise ValueError("'messages' must be a list of strings.")
     if any(not isinstance(m, str) for m in raw if m is not None):
-        return jsonify({"ok": False,
-                        "error": "Every message must be a string."}), 400
+        raise ValueError("Every message must be a string.")
 
     messages = [m.strip() for m in raw if isinstance(m, str) and m.strip()]
     if not messages:
-        return jsonify({"ok": False, "error": "No messages to classify."}), 400
+        raise ValueError("No messages to classify.")
     if len(messages) > MAX_BATCH:
-        return jsonify({"ok": False,
-                        "error": f"Cap is {MAX_BATCH} messages at a time."}), 400
+        raise ValueError(f"Cap is {MAX_BATCH} messages at a time.")
     if any(len(m) > MAX_MESSAGE_CHARS for m in messages):
-        return jsonify({"ok": False,
-                        "error": f"Messages are capped at {MAX_MESSAGE_CHARS:,} "
-                                 f"characters."}), 400
+        raise ValueError(f"Messages are capped at {MAX_MESSAGE_CHARS:,} characters.")
+    return messages
+
+
+@app.route("/api/batch", methods=["POST"])
+def api_batch():
+    body = request.get_json(force=True, silent=True) or {}
+    try:
+        messages = clean_batch(body.get("messages"))
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
     model, vectorizer = ensure_model()
     results = [classify(m, model, vectorizer) for m in messages]

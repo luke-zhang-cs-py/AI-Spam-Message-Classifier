@@ -36,7 +36,6 @@ EXTENDING THIS PROJECT
 
 import io
 import re
-import sys
 import string
 import argparse
 
@@ -64,6 +63,22 @@ from sklearn.metrics import (
 _HERE = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(_HERE, "spam_model.joblib")
 VECTORIZER_PATH = os.path.join(_HERE, "vectorizer.joblib")
+
+# The split, named once and imported by anything that needs to reproduce it.
+#
+# app.evaluate() scores a model loaded from disk by rebuilding this exact
+# split and testing on the held-out quarter. That is only held out if it is
+# the *same* split the model was trained with -- both numbers used to be
+# written out separately in both files, so changing the split here and not
+# there would have had the app quietly scoring a model against its own
+# training data and reporting the inflated number as accuracy.
+TEST_SIZE = 0.25
+RANDOM_STATE = 42
+
+# TF-IDF over unigrams and bigrams: "free" and "call now" both carry signal,
+# and bigrams are what let the explanation name a phrase rather than a word.
+NGRAM_RANGE = (1, 2)
+MIN_DF = 1
 
 # ---------------------------------------------------------------------------
 # Embedded dataset (originally dataset.csv) — 81 labeled sample messages
@@ -182,10 +197,11 @@ def train_and_evaluate(df: pd.DataFrame):
     y = df["label"].map({"ham": 0, "spam": 1})
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, random_state=42, stratify=y
+        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
     )
 
-    vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1, stop_words="english")
+    vectorizer = TfidfVectorizer(ngram_range=NGRAM_RANGE, min_df=MIN_DF,
+                                 stop_words="english")
     X_train_vec = vectorizer.fit_transform(X_train)
     X_test_vec = vectorizer.transform(X_test)
 
@@ -256,7 +272,13 @@ def predict_message(message: str, model, vectorizer) -> str:
     cleaned = clean_text(message)
     vec = vectorizer.transform([cleaned])
     pred = model.predict(vec)[0]
-    prob = model.predict_proba(vec)[0][pred] if hasattr(model, "predict_proba") else None
+    # Indexed by the model's class order, not by the label value. They
+    # coincide here because the labels are mapped to 0/1 before training, so
+    # classes_ is [0, 1] -- change that mapping and the old version would
+    # quietly report the wrong class's probability as the confidence.
+    prob = None
+    if hasattr(model, "predict_proba"):
+        prob = float(model.predict_proba(vec)[0][list(model.classes_).index(pred)])
     label = "spam" if pred == 1 else "ham"
     confidence = f" (confidence: {prob:.2%})" if prob is not None else ""
     return f"{label}{confidence}"
@@ -302,11 +324,11 @@ def run_interactive(model, vectorizer):
 def main():
     parser = argparse.ArgumentParser(description="AI Spam Message Classifier (all-in-one)")
     parser.add_argument("--classify", type=str, default=None,
-                         help="Classify a single message and exit")
+                        help="Classify a single message and exit")
     parser.add_argument("--interactive", action="store_true",
-                         help="Classify messages interactively (Ctrl+C to quit)")
+                        help="Classify messages interactively (Ctrl+C to quit)")
     parser.add_argument("--retrain", action="store_true",
-                         help="Force retraining even if a saved model already exists")
+                        help="Force retraining even if a saved model already exists")
     args = parser.parse_args()
 
     if args.classify or args.interactive:
