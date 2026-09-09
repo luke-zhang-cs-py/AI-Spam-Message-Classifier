@@ -44,6 +44,22 @@ _state = {"model": None, "vectorizer": None, "name": None,
 _lock = threading.Lock()
 
 
+def reset():
+    """Forget the cached model.
+
+    Every other module cache in this family of projects has one of these --
+    fxrates.reset, schedule.reset, realtime.reset_cache -- and this one did
+    not. It matters for the retrain endpoint: force_retrain=True replaces the
+    process-wide model, so a test that exercises it leaves every later test
+    running against a different object than it started with. Harmless while
+    the training is deterministic, and a real order-dependence the moment it
+    stops being.
+    """
+    with _lock:
+        _state.update(model=None, vectorizer=None, name=None,
+                      metrics=None, datasetSize=None)
+
+
 # ---------------------------------------------------------------------------
 # Model handling
 # ---------------------------------------------------------------------------

@@ -64,14 +64,20 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(_HERE, "spam_model.joblib")
 VECTORIZER_PATH = os.path.join(_HERE, "vectorizer.joblib")
 
-# The split, named once and imported by anything that needs to reproduce it.
+# The training recipe, named here and imported by everything that has to
+# reproduce it: app.py for scoring, train_spam_classifier.py for training.
 #
 # app.evaluate() scores a model loaded from disk by rebuilding this exact
 # split and testing on the held-out quarter. That is only held out if it is
-# the *same* split the model was trained with -- both numbers used to be
-# written out separately in both files, so changing the split here and not
-# there would have had the app quietly scoring a model against its own
+# the *same* split the model was trained with, so a split changed in one
+# place and not another has the app quietly scoring a model against its own
 # training data and reporting the inflated number as accuracy.
+#
+# An earlier pass named these and pointed app.py at them, but left
+# train_spam_classifier.py with the literals -- and the comment here said the
+# duplication was in the past tense, which made the remaining half invisible.
+# The values happened to agree, so nothing was wrong; nothing was guarding it
+# either.
 TEST_SIZE = 0.25
 RANDOM_STATE = 42
 
@@ -79,6 +85,12 @@ RANDOM_STATE = 42
 # and bigrams are what let the explanation name a phrase rather than a word.
 NGRAM_RANGE = (1, 2)
 MIN_DF = 1
+STOP_WORDS = "english"
+
+# Logistic regression needs more than the default 100 iterations to converge
+# on this feature count; below that sklearn warns and returns a model that has
+# stopped early, which reads as a worse algorithm rather than a setting.
+MAX_ITER = 1000
 
 # ---------------------------------------------------------------------------
 # Embedded dataset (originally dataset.csv) — 81 labeled sample messages
@@ -201,13 +213,13 @@ def train_and_evaluate(df: pd.DataFrame):
     )
 
     vectorizer = TfidfVectorizer(ngram_range=NGRAM_RANGE, min_df=MIN_DF,
-                                 stop_words="english")
+                                 stop_words=STOP_WORDS)
     X_train_vec = vectorizer.fit_transform(X_train)
     X_test_vec = vectorizer.transform(X_test)
 
     models = {
         "Multinomial Naive Bayes": MultinomialNB(),
-        "Logistic Regression": LogisticRegression(max_iter=1000),
+        "Logistic Regression": LogisticRegression(max_iter=MAX_ITER),
     }
 
     best_model, best_score, best_name = None, -1, None

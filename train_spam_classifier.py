@@ -36,6 +36,16 @@ from sklearn.metrics import (
     classification_report,
 )
 
+# The training recipe comes from the canonical module rather than being
+# restated here. These were four literals -- 0.25, 42, (1, 2) and 1 -- that
+# had to match the ones app.py reads by name in order for its held-out
+# quarter to be genuinely held out. They did match, but only by coincidence:
+# nothing compared them, and the comment over there described the duplication
+# in the past tense while this half of it was still sitting here.
+from spam_classifier_all_in_one import (  # noqa: E402
+    MAX_ITER, MIN_DF, NGRAM_RANGE, RANDOM_STATE, STOP_WORDS, TEST_SIZE,
+)
+
 # Resolved against this file, not the working directory. They used to be
 # bare relative names, which meant the artifacts landed wherever you happened
 # to be standing when you ran the script -- and app.py compensated by calling
@@ -69,16 +79,17 @@ def train_and_evaluate(df: pd.DataFrame):
     y = df["label"].map({"ham": 0, "spam": 1})
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, random_state=42, stratify=y
+        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
     )
 
-    vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1, stop_words="english")
+    vectorizer = TfidfVectorizer(ngram_range=NGRAM_RANGE, min_df=MIN_DF,
+                                 stop_words=STOP_WORDS)
     X_train_vec = vectorizer.fit_transform(X_train)
     X_test_vec = vectorizer.transform(X_test)
 
     models = {
         "Multinomial Naive Bayes": MultinomialNB(),
-        "Logistic Regression": LogisticRegression(max_iter=1000),
+        "Logistic Regression": LogisticRegression(max_iter=MAX_ITER),
     }
 
     best_model = None

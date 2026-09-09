@@ -13,3 +13,11 @@ __pycache__/
 .venv/
 venv/
 .DS_Store
+
+# Test artefacts. .coverage is a binary database of one local run, so it
+# changes on every invocation and shows as a modified file forever. It was
+# committed here by accident -- the transit project in this family had the
+# same one and its .gitignore says so.
+.coverage
+htmlcov/
+.pytest_cache/

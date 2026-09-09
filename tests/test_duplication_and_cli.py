@@ -16,6 +16,7 @@ is a mistake this project's history already contains.
 """
 
 import os
+import re
 import runpy
 import subprocess
 import sys
@@ -86,13 +87,44 @@ def test_the_web_app_cleans_text_the_same_way_as_the_cli():
 
 def test_the_split_is_defined_once():
     """app.evaluate() rebuilds the trainer's split to score a loaded model.
-    That quarter is only held-out data if it is the *same* quarter -- both
-    numbers used to be written out separately in both files."""
+    That quarter is only held-out data if it is the *same* quarter.
+
+    The previous version of this test did not look at the trainer at all,
+    despite its name, and its final assertion was
+    `web.clf.TEST_SIZE == allinone.TEST_SIZE` -- which cannot fail, because
+    `web.clf` *is* the allinone module. So it compared a value to itself
+    while train_spam_classifier.py still held the four literals.
+    """
     import app as web
-    source = open(os.path.join(ROOT, "app.py"), encoding="utf-8").read()
-    assert "test_size=clf.TEST_SIZE" in source
-    assert "random_state=clf.RANDOM_STATE" in source
-    assert web.clf.TEST_SIZE == allinone.TEST_SIZE
+    app_source = open(os.path.join(ROOT, "app.py"), encoding="utf-8").read()
+    assert "test_size=clf.TEST_SIZE" in app_source
+    assert "random_state=clf.RANDOM_STATE" in app_source
+    # Stated as identity, which is the real claim: app.py uses the canonical
+    # module rather than a recipe of its own.
+    assert web.clf is allinone
+
+    # The half that was missing. Identity rather than equality, so two
+    # separately declared constants that happen to be equal do not pass.
+    for name in ("TEST_SIZE", "RANDOM_STATE", "NGRAM_RANGE", "MIN_DF",
+                 "STOP_WORDS", "MAX_ITER"):
+        assert getattr(trainer, name) is getattr(allinone, name), name
+
+
+def test_the_trainer_states_no_recipe_of_its_own():
+    """The structural half.
+
+    Literals back in the trainer are the duplication starting again, and they
+    would agree with the canonical values right up until somebody changed one
+    -- which is the failure the comment in allinone described in the past
+    tense while this half of it was still live.
+    """
+    source = open(os.path.join(ROOT, "train_spam_classifier.py"),
+                  encoding="utf-8").read()
+    code = re.sub(r'"""(?:.|\n)*?"""', "", source)
+    code = re.sub(r"#[^\n]*", "", code)
+    for literal in ("test_size=0.25", "random_state=42", "ngram_range=(1, 2)",
+                    "min_df=1", 'stop_words="english"', "max_iter=1000"):
+        assert literal not in code, f"the trainer restates {literal}"
 
 
 # ----------------------------------------------------------------- classify
@@ -207,3 +239,64 @@ def test_running_the_module_by_name_does_not_train_on_import():
     """Importing must not have side effects; the training is behind main()."""
     module = runpy.run_path(os.path.join(ROOT, "classify.py"), run_name="not_main")
     assert "main" in module
+
+
+# --------------------------------------------------- the state-mutating parts
+
+def test_retraining_replaces_the_cached_model_and_reports_it():
+    """/api/retrain was the one endpoint no test touched, and it is the one
+    that mutates process-wide state. Left uncovered it is also the reason the
+    module needed a reset(): force_retrain=True swaps the model out from under
+    every later request in the process."""
+    import app as web
+    web.app.config["TESTING"] = True
+    client = web.app.test_client()
+
+    first = client.get("/api/model").get_json()
+    reply = client.post("/api/retrain")
+    assert reply.status_code == 200
+    body = reply.get_json()
+    assert body["ok"] is True
+    assert body["name"]
+    assert body["metrics"]
+    # Deterministic training, so the retrained model reports the same name and
+    # scores. That is the point: a differing figure here would mean the split
+    # or the seed moved.
+    assert body["name"] == first["name"]
+    assert body["metrics"] == first["metrics"]
+
+
+def test_reset_forgets_the_model_and_the_next_call_rebuilds_it():
+    """The isolation seam. Without it a retrain in one test silently changes
+    what every later test is running against."""
+    import app as web
+    web.ensure_model()
+    assert web._state["model"] is not None
+    web.reset()
+    assert web._state["model"] is None
+    assert web._state["metrics"] is None
+    model, vectorizer = web.ensure_model()
+    assert model is not None and vectorizer is not None
+
+
+# ------------------------------------------------------------ the classify CLI
+
+def test_the_classify_cli_labels_a_message_from_argv():
+    """classify.main() was at 45% -- the whole command-line half of a
+    command-line tool."""
+    result = subprocess.run(
+        [sys.executable, os.path.join(ROOT, "classify.py"),
+         "WINNER! Claim your FREE prize now, call 09061701461"],
+        capture_output=True, text=True, cwd=ROOT)
+    assert result.returncode == 0, result.stderr[-400:]
+    assert result.stdout.strip().upper().startswith("SPAM"), result.stdout
+
+
+def test_the_classify_cli_says_what_to_do_when_there_is_no_model(tmp_path,
+                                                                 monkeypatch):
+    """Rather than a traceback about a missing file. The artifacts are
+    gitignored, so this is the state of every fresh clone."""
+    monkeypatch.setattr(cli, "MODEL_PATH", str(tmp_path / "absent.joblib"))
+    monkeypatch.setattr(cli, "VECTORIZER_PATH", str(tmp_path / "absent2.joblib"))
+    monkeypatch.setattr(sys, "argv", ["classify.py"])
+    assert cli.main() == 1
