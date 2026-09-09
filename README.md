@@ -1,5 +1,9 @@
 # AI Spam Message Classifier
 
+[![CI](https://github.com/luke-zhang-cs-py/AI-Spam-Message-Classifier/actions/workflows/python-package.yml/badge.svg)](https://github.com/luke-zhang-cs-py/AI-Spam-Message-Classifier/actions/workflows/python-package.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.12-blue.svg)](https://www.python.org/)
+
 A self-contained machine learning project that classifies text messages as
 **spam** or **ham** (not spam) using scikit-learn.
 
@@ -169,3 +173,8 @@ and use cross-validation rather than a single split.
 scikit-learn objects are tied to the version that wrote them and frequently
 refuse to load under a different release, so committing them would ship a
 file that breaks elsewhere. Training takes under a second — just rerun.
+
+## License
+
+[MIT](LICENSE) — see [CONTRIBUTING.md](CONTRIBUTING.md) for setup and test
+conventions.
