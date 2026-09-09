@@ -33,10 +33,27 @@ def client():
 def test_artifacts_are_found_from_any_directory(tmp_path, monkeypatch):
     """These were bare relative filenames, so the model landed wherever you
     happened to be standing -- and app.py compensated by calling os.chdir()
-    at import time, which moves the whole process."""
+    at import time, which moves the whole process.
+
+    The paths are asserted before anything is trained, because that is the
+    real subject: absolute, and derived from the module rather than the cwd.
+    It then trains *while standing in tmp_path*, which is the stronger form
+    of the same claim -- the artifacts have to land beside the module, not
+    beside wherever the process happens to be.
+
+    It used to assert os.path.exists() on a model nobody had built. The
+    .joblib files are gitignored, so that held only on a machine where an
+    earlier run had left one behind, and failed in every fresh clone.
+    """
     monkeypatch.chdir(tmp_path)
     assert os.path.isabs(clf.MODEL_PATH)
+    assert os.path.isabs(clf.VECTORIZER_PATH)
+    assert os.path.dirname(clf.MODEL_PATH) == ROOT
+
+    web.ensure_model()
+
     assert os.path.exists(clf.MODEL_PATH)
+    assert not list(tmp_path.glob("*.joblib")), "artifacts written to the cwd"
     model, vectorizer = clf.load_artifacts()
     assert model is not None and vectorizer is not None
 
