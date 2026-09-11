@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Spam Message Classifier — overview</title>
+<meta name="description" content="A TF-IDF spam classifier with three ways in — scripts, one self-contained file, and a web UI that shows which words drove each verdict. Including why its own accuracy figure should be distrusted.">
+<meta property="og:title" content="AI Spam Message Classifier">
+<!-- No count in here. A figure typed into a meta tag is one nothing on the
+     page derives, so it is the first thing to go stale. -->
+<meta property="og:description" content="Spam or ham, with the words that decided it. Two models, one dataset small enough that a single message is worth five points of accuracy — and the page says so.">
+<meta property="og:type" content="website">
+<style>
+/* The warm surface this family of pages uses. The marks on top come from the
+ * validated palette and were re-run against *this* surface, because contrast
+ * only means anything against the colour the chart actually sits on:
+ *
+ *   series  #2a78d6  on #fffdf7   all five checks PASS (light)
+ *   series  #3987e5  on #1a1a19   all five checks PASS (dark)
+ *   good    #0ca30c  3.30:1
+ *   warning #fab219  1.80:1  sub-3:1 BY DESIGN -> always icon + label
+ *   crit    #d03b3b  4.72:1
+ *
+ * Run as a categorical set the status colours fail on #fab219, and are meant
+ * to: status is not a categorical palette, and amber is legal only with a
+ * glyph and a word beside it. Every use of it here has both.
+ *
+ * Dark is a selected set stepped for the dark surface, not an inversion. */
+.viz-root {
+  color-scheme: light;
+  --plane:     #ece6d6;
+  --surface:   #fffdf7;
+  --ink:       #12161d;
+  --ink-2:     #3c4453;
+  --ink-muted: #8d7a52;
+  --grid:      #ece6d6;
+  --ring:      #ded5bf;
+  --code-bg:   #f6f1e4;
+  --series:    #2a78d6;
+  --track:     #ece6d6;
+  --good:      #0ca30c;
+  --warning:   #fab219;
+  --critical:  #d03b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --plane: #0d0d0d; --surface: #1a1a19;
+    --ink: #ffffff; --ink-2: #c3c2b7; --ink-muted: #898781;
+    --grid: #2c2c2a; --ring: #383835; --code-bg: #21201e;
+    --series: #3987e5; --track: #2c2c2a;
+  }
+}
+:root[data-theme="dark"] .viz-root {
+  color-scheme: dark;
+  --plane: #0d0d0d; --surface: #1a1a19;
+  --ink: #ffffff; --ink-2: #c3c2b7; --ink-muted: #898781;
+  --grid: #2c2c2a; --ring: #383835; --code-bg: #21201e;
+  --series: #3987e5; --track: #2c2c2a;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+.viz-root {
+  --text: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 34px 24px 44px;
+  font: 15px/1.55 var(--text);
+  background: var(--plane); color: var(--ink);
+  min-height: 100vh;
+}
+main { max-width: 980px; margin: 0 auto; }
+
+.crumb {
+  margin: 0 0 6px; font: 400 12px var(--mono); color: var(--ink-muted);
+  letter-spacing: .02em;
+}
+h1 { font-size: 23px; margin: 0 0 5px; letter-spacing: -0.2px; }
+.lede { color: var(--ink-2); margin: 0; font-size: 15px; max-width: 68ch; }
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; flex-wrap: wrap; }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; }
+button, .btn {
+  font: 400 13px var(--text); cursor: pointer; text-decoration: none;
+  display: inline-block;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--ring); border-radius: 8px; padding: 7px 12px;
+}
+button:hover, .btn:hover { border-color: var(--ink-muted); }
+button[aria-pressed="true"] { border-color: var(--series); color: var(--series); }
+
+/* ------------------------------------------------------------ stat tiles */
+/* A bare stat tile is the one form that ships without a hover layer: there is
+ * no plot to interrogate, just the figure and what it counts. */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(156px, 1fr)); gap: 12px; margin: 26px 0 10px; }
+.tile { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; }
+.tile .k { display: block; color: var(--ink-2); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; }
+.tile .v { display: block; margin-top: 3px; font: 600 27px/1.12 var(--text); font-variant-numeric: tabular-nums; }
+.tile .n { display: block; margin-top: 2px; color: var(--ink-muted); font-size: 12px; }
+
+.note { color: var(--ink-muted); font-size: 13px; max-width: 80ch; margin: 12px 0 0; }
+
+/* ---------------------------------------------------------------- panels */
+.panel { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 17px 19px; margin-top: 22px; }
+.panel h2 { margin: 0 0 2px; font-size: 15px; }
+.panel h3 { margin: 20px 0 6px; font-size: 13px; color: var(--ink-2); }
+.panel .sub { margin: 0 0 14px; color: var(--ink-2); font-size: 13px; max-width: 76ch; }
+.panel p { font-size: 14px; color: var(--ink-2); max-width: 76ch; }
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 22px; }
+
+/* Thin marks on a recessive track, 4px rounding on the data end only so the
+ * mark stays anchored flat to the baseline it grows from. */
+.bars { display: grid; gap: 9px; }
+/* 210px for the label, not the 118px the sibling pages use: the longest
+   module name here is spam_classifier_all_in_one.py, which measured 199px
+   and was being clipped — a clipped name is one the reader cannot look up. */
+.bar { display: grid; grid-template-columns: 210px 1fr 92px; gap: 12px; align-items: center; }
+.bar .lab { font: 400 12.5px var(--mono); color: var(--ink-2); }
+.bar .rail { position: relative; height: 12px; background: var(--track); border-radius: 3px; }
+.bar .fill { position: absolute; inset: 0 auto 0 0; background: var(--series); border-radius: 0 4px 4px 0; }
+.bar .val { text-align: right; font: 500 12px var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.bar:hover .rail { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* ----------------------------------------------------------------- table */
+table { width: 100%; border-collapse: collapse; }
+caption { text-align: left; color: var(--ink-2); font-size: 13px; padding-bottom: 10px; }
+th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--grid); font-size: 13px; vertical-align: top; }
+th { color: var(--ink-2); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+td.mono { font-family: var(--mono); font-size: 12px; }
+tr.total td { border-bottom: none; font-weight: 600; }
+[hidden] { display: none !important; }
+
+code { font-family: var(--mono); font-size: 12.5px; background: var(--code-bg); border: 1px solid var(--grid); border-radius: 4px; padding: 1px 5px; }
+pre {
+  background: var(--code-bg); border: 1px solid var(--grid); border-radius: 8px;
+  padding: 13px 15px; overflow-x: auto;
+  font: 12.5px/1.7 var(--mono); color: var(--ink); margin: 12px 0 0;
+}
+
+/* Numbered steps. */
+.flow { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+.flow li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; font-size: 13.5px; color: var(--ink-2); }
+.step {
+  font: 500 11px var(--mono); color: var(--series);
+  border: 1px solid var(--ring); border-radius: 5px;
+  text-align: center; padding: 1px 0; height: 20px;
+}
+
+/* Status. Never colour alone: each carries a glyph and a word, which is what
+ * makes the sub-3:1 amber legal. */
+.flag { display: inline-flex; align-items: center; gap: 5px; font: 500 11.5px var(--mono); white-space: nowrap; }
+.flag .g { font-size: 12px; }
+.flag.good { color: var(--good); }
+.flag.warn { color: var(--warning); }
+.flag.crit { color: var(--critical); }
+
+dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 12px 0 0; font-size: 13px; }
+dl.kv dt { color: var(--ink-2); font-family: var(--mono); font-size: 12px; }
+dl.kv dd { margin: 0; }
+
+footer { margin-top: 28px; color: var(--ink-muted); font-size: 12.5px; max-width: 86ch; }
+footer a { color: inherit; }
+</style>
+</head>
+
+<body class="viz-root" data-palette="#2a78d6">
+<main>
+
+<div class="head">
+  <div>
+    <p class="crumb">AI-Spam-Message-Classifier &middot; port 5002</p>
+    <h1>Spam or ham, and which words decided it</h1>
+    <p class="lede">
+      A TF-IDF classifier with three ways in — two scripts, one
+      self-contained file, and a web page that shows the
+      <strong>per-word contribution</strong> behind every verdict. All three
+      drive the same pipeline. The interesting part of this project is not
+      the accuracy figure; it is the reasons that figure should not be
+      trusted, which are on this page rather than buried.
+    </p>
+  </div>
+  <div class="controls">
+    <button id="themeBtn" type="button">Theme</button>
+    <button id="tableBtn" type="button" aria-pressed="false">Table view</button>
+    <a class="btn" href="https://github.com/luke-zhang-cs-py/AI-Spam-Message-Classifier">Repository</a>
+    <a class="btn" id="localBtn" href="http://127.0.0.1:5002/"
+       title="Only works on a machine that is running the app">Open app (local)</a>
+  </div>
+</div>
+
+<section class="tiles" id="tiles" aria-label="Headline figures"></section>
+<p class="note" id="tilesNote"></p>
+
+<!-- ==================================================== the result -->
+<section class="panel">
+  <h2>The result, and the three reasons to distrust it</h2>
+  <p class="sub">
+    Both models, scored on the same held-out split. Read the table, then read
+    what is under it — the numbers are real, and they describe this dataset
+    rather than the world.
+  </p>
+  <table>
+    <caption>A 25% split of 81 messages. One test message is worth
+      <span id="perMessage"></span> percentage points of accuracy.</caption>
+    <thead>
+      <tr><th>Model</th><th class="num">Accuracy</th><th class="num">Precision</th>
+          <th class="num">Recall</th><th class="num">F1</th><th>Confusion</th></tr>
+    </thead>
+    <tbody id="modelBody"></tbody>
+  </table>
+
+  <div class="split">
+    <div>
+      <h3>1. The two models are tied, and that is the finding</h3>
+      <p>
+        They do not merely score the same — they produce the
+        <strong>identical confusion matrix</strong>, so they make the same
+        call on all 21 test messages, and miss the same two. Two very
+        different algorithms agreeing perfectly is a symptom of the data, not
+        a strong model: the spam here is separable by obvious keywords, so
+        almost any classifier lands in the same place.
+      </p>
+    </div>
+    <div>
+      <h3>2. "Best model" is a coin toss</h3>
+      <p>
+        The trainer compares with <code>f1 &gt; best_score</code> and
+        iterates Naive Bayes first, so on a tie the first one wins. It
+        reports Naive Bayes as best. That is the iteration order presented as
+        a result.
+      </p>
+    </div>
+    <div>
+      <h3>3. The dataset is 81 messages</h3>
+      <p>
+        40 spam, 41 ham, and <em>written</em> rather than collected — clean,
+        unambiguous, and free of the obfuscation real spam uses
+        (<code>Fr33</code>, unicode lookalikes, image-only payloads). The
+        metrics will swing noticeably if you change
+        <code>random_state</code>.
+      </p>
+    </div>
+    <div>
+      <h3>What it does get right</h3>
+      <p>
+        No false positives: no real message was called spam, at the cost of
+        missing 2 of 10 spam. For a spam filter that is the right side to err
+        on — a missed spam is an annoyance, a misfiled real message is a lost
+        message.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- =============================================== the explanation -->
+<section class="panel">
+  <h2>Why it said that</h2>
+  <p class="sub">
+    The part the command line cannot give you. Both classifiers reduce to a
+    linear score over TF-IDF features, so a token's contribution is its
+    TF-IDF value times the model's weight for it — and the page colours each
+    word by which way it pushed.
+  </p>
+  <pre id="explainSample"></pre>
+  <p>
+    The two models keep that weight in different places —
+    <code>coef_</code> for logistic regression, the difference between the
+    two rows of <code>feature_log_prob_</code> for Naive Bayes — and
+    <code>token_weights()</code> handles both, so the explanation does not
+    depend on which model happened to win the tie.
+  </p>
+</section>
+
+<!-- ================================================== the pipeline -->
+<section class="panel">
+  <h2>The pipeline, once</h2>
+  <p class="sub">
+    One recipe, three entry points. The self-contained file is the canonical
+    statement of it; the trainer and the web app import the six constants
+    from there rather than restating them.
+  </p>
+  <ul class="flow" id="stepList"></ul>
+  <dl class="kv" id="constKv"></dl>
+  <p class="note" id="constNote"></p>
+</section>
+
+<!-- ==================================================== the source -->
+<section class="panel" id="modulePanel">
+  <h2>Every module, by size</h2>
+  <p class="sub" id="moduleSub"></p>
+  <div id="moduleBars" class="bars"></div>
+</section>
+
+<section class="panel" id="testPanel">
+  <h2>Where the tests are</h2>
+  <p class="sub" id="testSub"></p>
+  <div id="testBars" class="bars"></div>
+</section>
+
+<section class="panel" id="tablePanel" hidden>
+  <table>
+    <caption>Every module with its size, statements, coverage and what it is
+      for. The same data as the two charts above.</caption>
+    <thead>
+      <tr><th>Module</th><th class="num">Lines</th><th class="num">Stmts</th>
+          <th class="num">Covered</th><th>What it does</th></tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</section>
+
+<!-- ======================================================= the bugs -->
+<section class="panel">
+  <h2>Bugs, and what found each one</h2>
+  <p class="sub">
+    Six were found in one pass over the web front end, before which there
+    were no tests at all. The last two came from an audit and are the more
+    interesting kind: code that was not wrong yet.
+  </p>
+  <table>
+    <thead>
+      <tr><th>What was wrong</th><th>What found it</th><th class="num">State</th></tr>
+    </thead>
+    <tbody id="bugBody"></tbody>
+  </table>
+</section>
+
+<!-- ======================================================= the next -->
+<section class="panel">
+  <h2>What would make the numbers mean something</h2>
+  <p class="sub">
+    Nothing here is a fix to the code. The model is fine; the evidence is
+    thin, and these are the things that would thicken it.
+  </p>
+  <ul class="flow" id="nextList"></ul>
+</section>
+
+<footer>
+  <p id="footNote"></p>
+  <p>
+    <a href="https://github.com/luke-zhang-cs-py/AI-Spam-Message-Classifier">Repository</a>
+    &middot; MIT &middot; the app runs on your own machine, on port 5002
+  </p>
+</footer>
+
+</main>
+
+<script>
+'use strict';
+
+/* Every number on this page is read from here, so the tiles, the charts and
+ * the table cannot drift apart.
+ *
+ * Measured on 11 September 2026 in the repository: `pytest -q --cov` for the
+ * statements and what is uncovered, `wc -l` for length, `pytest
+ * --collect-only -q` for the test counts, and the model scores by running
+ * train_spam_classifier.py. Not estimated. tests/test_published_figures.py
+ * checks the module and test figures against a fresh measurement, and
+ * `python tools/refresh_figures.py` rewrites them. */
+
+var MODULES = [
+  { name: 'spam_classifier_all_in_one.py', lines: 366, stmts: 135, missed: 39, does: 'the whole pipeline in one file, dataset inlined — the canonical recipe' },
+  { name: 'app.py',                        lines: 295, stmts: 112, missed:  8, does: 'the web UI, five endpoints, and the per-word explanation' },
+  { name: 'train_spam_classifier.py',      lines: 179, stmts:  95, missed: 13, does: 'trains both models, compares them, saves the winner' },
+  { name: 'classify.py',                   lines:  72, stmts:  31, missed: 13, does: 'one message from the command line, or an interactive loop' }
+];
+
+var TESTS = [
+  { file: 'test_app.py',                 n: 29, of: 'the five endpoints, the caps, and the vanishing metrics' },
+  { file: 'test_duplication_and_cli.py', n: 23, of: 'that the three entry points share one recipe' },
+  { file: 'test_published_figures.py',   n:  8, of: 'the numbers on this page, against a fresh measurement' }
+];
+
+var TEST_LINES = 759;
+var ROUTE_COUNT = 5;
+
+/* From dataset.csv and a run of the trainer. */
+var DATA = { messages: 81, spam: 40, ham: 41, testSplit: 21, testFraction: 0.25 };
+
+var MODELS = [
+  { name: 'Multinomial Naive Bayes', accuracy: 0.905, precision: 1.000,
+    recall: 0.800, f1: 0.889, tn: 11, fp: 0, fn: 2, tp: 8 },
+  { name: 'Logistic Regression',     accuracy: 0.905, precision: 1.000,
+    recall: 0.800, f1: 0.889, tn: 11, fp: 0, fn: 2, tp: 8 }
+];
+
+var STEPS = [
+  '<strong>Clean</strong> — lowercase, and strip URLs, digits and punctuation.',
+  '<strong>Vectorise</strong> — <code>TfidfVectorizer</code> over unigrams and bigrams, which down-weights common English words.',
+  '<strong>Fit two models</strong> — <code>MultinomialNB</code> and <code>LogisticRegression</code>, on the same split.',
+  '<strong>Score</strong> — accuracy, precision, recall, F1 and a confusion matrix on the held-out quarter.',
+  '<strong>Keep the better one</strong> — by F1, which on a tie means the first one tried.',
+  '<strong>Infer</strong> — a new message is cleaned and vectorised the same way, then scored, then explained.'
+];
+
+/* The six constants the three entry points must agree on. */
+var CONSTANTS = [
+  ['TEST_SIZE', '0.25 — the held-out quarter'],
+  ['RANDOM_STATE', '42 — so the split is the same every run'],
+  ['NGRAM_RANGE', '(1, 2) — unigrams and bigrams'],
+  ['MIN_DF', '1 — every token counts, on a dataset this small'],
+  ['STOP_WORDS', '"english"'],
+  ['MAX_ITER', '1000 — for the logistic regression']
+];
+
+/* Authored prose with intentional markup, kept out of esc() deliberately --
+ * see drawBugs, which says so. Nothing here comes from a user. */
+var BUGS = [
+  ['The model’s scores disappeared after the first run',
+   '<code>evaluate()</code> was called on the training path only, and the <code>.joblib</code> artifacts are gitignored — so the first run after a clone trained a model and showed its accuracy, and every restart afterwards loaded that model and showed nothing. The page explained it away as inherent: "a model loaded from disk carries no metrics with it". It is not inherent — re-scoring against the same fixed split gives the same answer. A metric that vanishes is worse than one that was never there.',
+   'Restarting the app and noticing the number had gone', 'fixed'],
+  ['<code>{"messages": "free money"}</code> returned 200 and nine verdicts',
+   '<code>/api/batch</code> iterated a bare string character by character and cheerfully reported a summary. An int or a nested list raised inside the comprehension and came back as a 500. Both are 400 now.',
+   'Posting the wrong shape on purpose', 'fixed'],
+  ['One request could be megabytes of work',
+   'Neither endpoint capped message length, and the batch endpoint multiplied that by two hundred. A 2.2 MB message took 2.7 seconds and returned 200. Capped at 20,000 characters.',
+   'Pasting something absurd', 'fixed'],
+  ['<code>os.chdir()</code> at import time',
+   '<code>MODEL_PATH</code> and <code>VECTORIZER_PATH</code> were bare relative filenames, so the artifacts landed wherever you were standing when you ran the script — and <code>app.py</code> compensated by changing the process’s working directory as a side effect of being imported, which moves the ground under anything else in the same process. Both resolve against the source file now, and the CLI works from any directory.',
+   'Running the CLI from a different directory', 'fixed'],
+  ['Two first requests trained two models',
+   '<code>ensure_model</code> released the lock between checking the cache and filling it. Held for the whole operation now.',
+   'Reading the locking, not a symptom', 'fixed'],
+  ['<code>/api/model</code> reparsed the dataset on every request',
+   'To report a number that does not change. Cached with the rest of the model state.',
+   'Profiling a trivial endpoint', 'fixed'],
+  ['A test that could not fail',
+   '<code>test_the_split_is_defined_once</code> ended with <code>assert web.clf.TEST_SIZE == allinone.TEST_SIZE</code> — and <code>web.clf</code> <em>is</em> <code>allinone</code>, so it compared an attribute to itself. No change to any file could have made it fail. It also never looked at the trainer at all, despite a name asserting a project-wide property. It now checks all six constants with <code>is</code> rather than <code>==</code>, so two separately declared constants that happen to be equal do not pass.',
+   'An audit pass — and confirmed by running the new guards against the old code', 'fixed'],
+  ['Four constants that had to agree, and nothing checked',
+   '<code>NGRAM_RANGE</code>, <code>MIN_DF</code>, <code>stop_words</code> and <code>max_iter</code> were written out separately in the trainer. Every value happened to match, so there was no live bug — but <code>evaluate()</code> scores a model loaded from disk by rebuilding the trainer’s split, and that quarter is only held-out data if it is the <em>same</em> quarter. A split changed in one file and not the other has the app scoring a model against its own training data and reporting the inflated number as accuracy.',
+   'An audit pass. Not wrong yet, which is the point', 'fixed']
+];
+
+var NEXT = [
+  '<strong>A real corpus.</strong> The UCI SMS Spam Collection is about 5,570 collected messages in the same <code>label,text</code> shape, which is roughly seventy times this dataset and far harder.',
+  '<strong>Cross-validation rather than one split.</strong> With 21 test messages, a single split is a coin-flip about which two spam messages land in it.',
+  '<strong>Break the tie honestly.</strong> If two models are indistinguishable on the evidence, the trainer should say so rather than report the one it tried first.',
+  '<strong>Other models are drop-in</strong> — <code>LinearSVC</code> and <code>MLPClassifier</code> swap straight in. Note <code>LinearSVC</code> has no <code>predict_proba</code>, so the confidence degrades to absent rather than failing.'
+];
+
+/* ------------------------------------------------------------- helpers */
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+  });
+}
+function el(id) { return document.getElementById(id); }
+function covered(m) { return m.stmts - m.missed; }
+function coverage(m) { return Math.round(100 * covered(m) / m.stmts); }
+function sum(list, field) {
+  return list.reduce(function (n, item) { return n + field(item); }, 0);
+}
+
+var STMTS = sum(MODULES, function (m) { return m.stmts; });
+var COVERED = sum(MODULES, covered);
+var LINES = sum(MODULES, function (m) { return m.lines; });
+var TEST_COUNT = sum(TESTS, function (t) { return t.n; });
+
+/* ---------------------------------------------------------------- tiles */
+
+function drawTiles() {
+  var tiles = [
+    ['Tests', TEST_COUNT.toLocaleString(),
+     TESTS.length + ' files, ' + TEST_LINES.toLocaleString() + ' lines'],
+    ['Coverage', Math.round(100 * COVERED / STMTS) + '%',
+     COVERED.toLocaleString() + ' of ' + STMTS.toLocaleString() + ' statements'],
+    ['Accuracy', MODELS[0].accuracy.toFixed(3),
+     'on ' + DATA.testSplit + ' held-out messages'],
+    ['The dataset', DATA.messages,
+     DATA.spam + ' spam, ' + DATA.ham + ' ham'],
+    ['Endpoints', ROUTE_COUNT, 'Flask, loopback, no auth']
+  ];
+  el('tiles').innerHTML = tiles.map(function (t) {
+    return '<div class="tile"><span class="k">' + esc(t[0]) +
+      '</span><strong class="v">' + esc(t[1]) + '</strong>' +
+      '<span class="n">' + esc(t[2]) + '</span></div>';
+  }).join('');
+
+  el('tilesNote').textContent =
+    'The accuracy tile is the one to be suspicious of, and the panel below ' +
+    'says why in three ways. Coverage is ' +
+    Math.round(100 * COVERED / STMTS) + '%: the uncovered ' +
+    (STMTS - COVERED) + ' statements are the printing — the interactive ' +
+    'input() loop, the console report the trainer writes, and the ' +
+    'if-name-is-main blocks. The logic they print is covered; driving a ' +
+    'prompt to assert on stdout would test the formatting and nothing else.';
+}
+
+/* --------------------------------------------------------------- charts */
+
+function drawBars(id, rows, label, value, size, peak) {
+  el(id).innerHTML = rows.map(function (row) {
+    var width = (size(row) / peak * 100).toFixed(1);
+    return '<div class="bar" title="' + esc(label(row) + ' — ' + value(row)) +
+      '"><span class="lab">' + esc(label(row)) + '</span>' +
+      '<span class="rail"><span class="fill" style="width:' + width +
+      '%"></span></span>' +
+      '<span class="val">' + esc(value(row)) + '</span></div>';
+  }).join('');
+}
+
+function byStatements() {
+  return MODULES.slice().sort(function (a, b) { return b.stmts - a.stmts; });
+}
+
+function drawModules() {
+  var rows = byStatements();
+  var peak = rows[0].stmts;
+  el('moduleSub').textContent =
+    'By executable statements, largest first. One measure, so one colour and ' +
+    'no legend — the heading names it, and every bar is labelled directly. ' +
+    'The largest is the self-contained file, which is deliberate duplication: ' +
+    'its whole purpose is to run anywhere with no other files, so it declares ' +
+    'the recipe itself. It is the other three that stop restating it.';
+  drawBars('moduleBars', rows,
+           function (m) { return m.name; },
+           function (m) { return m.stmts + ' · ' + coverage(m) + '%'; },
+           function (m) { return m.stmts; }, peak);
+}
+
+function drawTests() {
+  var peak = Math.max.apply(null, TESTS.map(function (t) { return t.n; }));
+  el('testSub').textContent =
+    'Two files, ' + TEST_COUNT + ' tests, ' +
+    TEST_LINES.toLocaleString() + ' lines of them against ' +
+    LINES.toLocaleString() + ' of source. The second file is unusual: it ' +
+    'exists to assert that three entry points to one pipeline have not ' +
+    'drifted apart, which is the failure this project is actually exposed to.';
+  drawBars('testBars', TESTS,
+           function (t) { return t.file.replace('test_', '').replace('.py', ''); },
+           function (t) { return String(t.n); },
+           function (t) { return t.n; }, peak);
+}
+
+/* --------------------------------------------------------------- tables */
+
+function drawModels() {
+  el('perMessage').textContent = (100 / DATA.testSplit).toFixed(1);
+  el('modelBody').innerHTML = MODELS.map(function (m) {
+    return '<tr><td>' + esc(m.name) + '</td>' +
+      '<td class="num">' + m.accuracy.toFixed(3) + '</td>' +
+      '<td class="num">' + m.precision.toFixed(3) + '</td>' +
+      '<td class="num">' + m.recall.toFixed(3) + '</td>' +
+      '<td class="num">' + m.f1.toFixed(3) + '</td>' +
+      '<td class="mono">' + m.tn + ' ham right, ' + m.fp + ' false spam, ' +
+      m.fn + ' spam missed, ' + m.tp + ' spam caught</td></tr>';
+  }).join('');
+}
+
+function drawTable() {
+  var rows = byStatements().map(function (m) {
+    return '<tr><td class="mono">' + esc(m.name) + '</td>' +
+      '<td class="num">' + m.lines + '</td>' +
+      '<td class="num">' + m.stmts + '</td>' +
+      '<td class="num">' + coverage(m) + '%</td>' +
+      '<td>' + esc(m.does) + '</td></tr>';
+  }).join('');
+  el('tableBody').innerHTML = rows +
+    '<tr class="total"><td>Total</td><td class="num">' +
+    LINES.toLocaleString() + '</td><td class="num">' +
+    STMTS.toLocaleString() + '</td><td class="num">' +
+    Math.round(100 * COVERED / STMTS) + '%</td><td>&mdash;</td></tr>';
+}
+
+function drawBugs() {
+  el('bugBody').innerHTML = BUGS.map(function (b) {
+    return '<tr><td><b>' + b[0] + '</b><br>' + b[1] + '</td>' +
+      '<td>' + b[2] + '</td>' +
+      '<td class="num"><span class="flag good"><span class="g">✓</span>' +
+      esc(b[3]) + '</span></td></tr>';
+  }).join('');
+}
+
+function drawSteps() {
+  el('stepList').innerHTML = STEPS.map(function (text, index) {
+    var n = index + 1;
+    return '<li><span class="step">' + (n < 10 ? '0' + n : n) +
+      '</span><span>' + text + '</span></li>';
+  }).join('');
+  el('constKv').innerHTML = CONSTANTS.map(function (pair) {
+    return '<dt>' + esc(pair[0]) + '</dt><dd>' + esc(pair[1]) + '</dd>';
+  }).join('');
+  el('constNote').textContent =
+    'All six are imported from the self-contained module rather than written ' +
+    'out again, and a test checks each with "is" rather than equality — ' +
+    'because ' +
+    'two separately declared constants that happen to be equal would pass an ' +
+    'equality check and still be two constants. The one that matters most is ' +
+    'the split: evaluate() scores a model from disk by rebuilding the ' +
+    'trainer’s split, and that quarter is only held-out data if it is the ' +
+    'same quarter.';
+}
+
+function drawNext() {
+  el('nextList').innerHTML = NEXT.map(function (text) {
+    return '<li><span class="step">&rarr;</span><span>' + text +
+      '</span></li>';
+  }).join('');
+}
+
+function drawSamples() {
+  el('explainSample').textContent = [
+    "POST /api/classify   {\"message\": \"Congratulations, you have won a free",
+    "                                  ticket! Click here to claim now\"}",
+    "",
+    "  spam, confidence 77.23%",
+    "",
+    "  towards spam   free  +0.41   click  +0.33   won  +0.29   claim  +0.22",
+    "  towards ham    here  -0.04",
+    "",
+    "  (contribution = the token's TF-IDF value x the model's weight for it)"
+  ].join('\n');
+}
+
+/* -------------------------------------------------------------- controls */
+
+el('themeBtn').addEventListener('click', function () {
+  var set = document.documentElement.getAttribute('data-theme');
+  var dark = set ? set === 'dark'
+    : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
+});
+
+el('tableBtn').addEventListener('click', function () {
+  var showTable = el('tablePanel').hidden;
+  el('tablePanel').hidden = !showTable;
+  el('modulePanel').hidden = showTable;
+  el('testPanel').hidden = showTable;
+  this.setAttribute('aria-pressed', String(showTable));
+  this.textContent = showTable ? 'Chart view' : 'Table view';
+});
+
+el('footNote').textContent =
+  'Figures measured on 11 September 2026 in the repository with pytest ' +
+  '--cov, wc -l and pytest --collect-only, and the model scores by running ' +
+  'the trainer — not estimated. The module and test figures are checked ' +
+  'against a fresh measurement by tests/test_published_figures.py, because ' +
+  'a page like this goes stale the moment a test is added. Everything here ' +
+  'is read from one data block, so the tiles, the charts and the table ' +
+  'cannot disagree. The saved model is not committed: a pickled ' +
+  'scikit-learn object is tied to the version that wrote it and often ' +
+  'refuses to load under another, so committing it would ship a file that ' +
+  'breaks elsewhere. Training takes under a second.';
+
+drawTiles();
+drawModules();
+drawTests();
+drawModels();
+drawTable();
+drawBugs();
+drawSteps();
+drawNext();
+drawSamples();
+</script>
+</body>
+</html>

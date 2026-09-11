@@ -1,6 +1,8 @@
 [run]
 omit =
     tests/*
+    # Developer scripts, not shipped code.
+    tools/*
 
 # Without this the test files counted as covered source and padded the total:
 # 79% reported against 68% of the actual modules. Every other project in this

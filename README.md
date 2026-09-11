@@ -4,6 +4,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.12-blue.svg)](https://www.python.org/)
 
+**[Read the overview →](https://luke-zhang-cs-py.github.io/AI-Spam-Message-Classifier/)**
+— the result and the three reasons to distrust it, how a verdict is
+explained, and every bug this thing has had.
+
 A self-contained machine learning project that classifies text messages as
 **spam** or **ham** (not spam) using scikit-learn.
 
