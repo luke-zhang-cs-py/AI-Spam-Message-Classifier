@@ -368,10 +368,18 @@ var MODULES = [
 var TESTS = [
   { file: 'test_app.py',                 n: 29, of: 'the five endpoints, the caps, and the vanishing metrics' },
   { file: 'test_duplication_and_cli.py', n: 23, of: 'that the three entry points share one recipe' },
-  { file: 'test_published_figures.py',   n:  8, of: 'the numbers on this page, against a fresh measurement' }
+  { file: 'test_published_figures.py',   n:  9, of: 'the numbers on this page, against a fresh measurement' }
 ];
 
-var TEST_LINES = 759;
+var TEST_LINES = 801;
+
+/* Which interpreter produced the statement counts above. It matters: coverage
+ * counts a `with` block or a multi-line call differently between versions, so
+ * the same unchanged file measures a different number of statements under a
+ * different Python. The guard compares only when the running one is this one,
+ * and skips with a reason otherwise -- which is why this line exists rather
+ * than the check simply failing on a CI runner. */
+var MEASURED_WITH = 'Python 3.14';
 var ROUTE_COUNT = 5;
 
 /* From dataset.csv and a run of the trainer. */
@@ -643,6 +651,11 @@ el('footNote').textContent =
   'scikit-learn object is tied to the version that wrote it and often ' +
   'refuses to load under another, so committing it would ship a file that ' +
   'breaks elsewhere. Training takes under a second.';
+
+el('footNote').textContent += ' The statement counts were produced by ' +
+  MEASURED_WITH + ': coverage counts statements differently between versions, so the
+  figure is a property of the code and the interpreter together, and the check that
+  guards it compares only like with like.';
 
 drawTiles();
 drawModules();
