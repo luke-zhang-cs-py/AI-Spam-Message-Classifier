@@ -24,6 +24,7 @@ empty measurement — which would "pass" by calling everything uncovered.
 
 `python tools/refresh_figures.py` rewrites whatever this finds wrong.
 """
+import fnmatch
 import io
 import os
 import re
@@ -41,6 +42,12 @@ PAGE = os.path.join(ROOT, "docs", "index.html")
 # the config too; the rest are never source.
 SKIP_DIRS = {".git", "__pycache__", "tests", "htmlcov", ".venv", "venv",
              "node_modules", "docs", "tools", "data", "static", "templates"}
+
+# The page's own history: counts that describe what a figure *used to* say.
+# These are the only numbers on the page allowed to be wrong, because being
+# wrong is what they are about. Each one is asserted to still be present, so
+# an entry cannot quietly outlive the sentence it exempts.
+HISTORY = ()
 
 
 @pytest.fixture(scope="module")
@@ -76,25 +83,23 @@ def source_files():
     return set(out)
 
 
-def omitted_by_config():
-    """What .coveragerc leaves out, as plain relative paths.
+def omit_patterns():
+    """The omit patterns from .coveragerc, forward-slashed.
 
-    Only the simple cases: a bare filename, or a directory glob like
-    `tests/*`. That covers what this project's config actually says, and
-    anything cleverer would be a second implementation of coverage's own
-    matching.
+    Matched with fnmatch rather than compared as strings: a config that omits
+    `tools_*.py` covers five files and equals none of them, so a string
+    comparison called every one of them "not omitted".
     """
     import coverage
     config = os.path.join(ROOT, ".coveragerc")
     cov = coverage.Coverage(config_file=config if os.path.exists(config)
                             else True)
-    names = set()
-    for pattern in cov.config.run_omit or ():
-        clean = pattern.replace("\\", "/")
-        if clean.endswith("/*"):
-            continue                      # a whole directory, handled by SKIP
-        names.add(clean)
-    return names
+    return [pattern.replace("\\", "/")
+            for pattern in cov.config.run_omit or ()]
+
+
+def is_omitted(name):
+    return any(fnmatch.fnmatch(name, pattern) for pattern in omit_patterns())
 
 
 def measure(name):
@@ -153,11 +158,10 @@ def test_the_omitted_modules_really_are_omitted(page):
     claimed = listed_omissions(page)
     if not claimed:
         pytest.skip("this page claims no omissions")
-    config = omitted_by_config()
     for name in claimed:
-        assert name in config, (
-            f"the page says {name} is omitted from coverage, but "
-            f".coveragerc does not omit it")
+        assert is_omitted(name), (
+            f"the page says {name} is omitted from coverage, but nothing in "
+            f".coveragerc matches it: {omit_patterns()}")
 
 
 def test_every_figure_on_the_page_is_the_measured_one(page):
@@ -232,8 +236,11 @@ def test_no_count_is_typed_outside_the_data_block(page):
     body = re.sub(r"var MODULES = \[.*?\n\];", "", page, flags=re.DOTALL)
     body = re.sub(r"var TESTS = \[.*?\n\];", "", body, flags=re.DOTALL)
     body = re.sub(r"var OMITTED = \[.*?\n\];", "", body, flags=re.DOTALL)
-    # The suite's own history, which is about being wrong and has to stay.
-    body = body.replace("38 tests", "").replace("Six red CI runs", "")
+    for sentence in HISTORY:
+        assert sentence in page, (
+            f"the history this check exempts is no longer on the page: "
+            f"{sentence!r} -- take it out of HISTORY too")
+        body = body.replace(sentence, "")
     typed = re.findall(r"[\d,]{2,}\s*(?:executable\s+)?(?:statements|tests)\b",
                        body)
     assert not typed, (
