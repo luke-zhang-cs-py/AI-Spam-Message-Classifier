@@ -258,12 +258,57 @@ contributed +0.04" is a number with a label on it, not an explanation.
   which is what rules out `LinearSVC` however well it scores.
 - **Serve it** — `app.py` is the reference for wrapping the model in HTTP.
 
+## Tests
+
+```bash
+pytest -q
+pytest -q --cov=. --cov-report=term-missing
+pytest -q --cov=. --cov-branch            # 100% of branches too, bar none
+```
+
+138 tests, 100% of 528 statements. That figure is itself checked:
+`tests/test_published_figures.py` measures the repository and compares it
+with what this README and the published overview claim, because both had
+gone stale — the page described an 81-message corpus, two tied models with
+no false positives, and a `stop_words="english"` that had been `None` for a
+while. `python tools/refresh_figures.py` rewrites them.
+
+Two things worth knowing about how the figure was reached, because "100%" on
+its own is not a claim about much:
+
+- **Nothing is excluded to get there except the `__main__` blocks.** Those
+  call `app.run()` or `sys.exit(main())`, and a module that started a server
+  on import could not be imported by a test at all. Everything they *call*
+  is covered directly, in `tests/test_cli_entry_points.py`.
+- **Branch coverage is 100% as well**, which is the check that catches what
+  line coverage hides: a two-way `if` fully covered on one side only. Two
+  such branches survived the first pass at 100% lines — both the
+  "`--embeddings` is available, proceed" fall-through that the flag exists
+  for, and which only refusal tests had ever reached.
+
+Coverage was 75% before this pass, and most of the gap was not untested code
+— it was code tested through `subprocess.run`, which proves the CLI works
+from a real shell and contributes nothing to the measurement, because the
+lines execute in a process the coverage tool never sees. Those tests are
+still there; the entry points are now also driven in process.
+
+The one real refactor it forced: `classify.py`'s interactive loop called
+`input()` directly, so the whole interactive half of an interactive tool was
+unreachable from any test. It takes its reader as a parameter now, the same
+fix `spam_classifier_all_in_one.py` had already had — resolved at call time
+rather than as a `read=input` default, because a default argument is
+evaluated once at import and silently ignores any later replacement.
+
 ## Note on the saved model
 
 `spam_model.joblib` and `vectorizer.joblib` are git-ignored. Pickled
 scikit-learn objects are tied to the version that wrote them and frequently
 refuse to load under a different release, so committing them would ship a
 file that breaks elsewhere. Training takes under a second — just rerun.
+
+`models/` is git-ignored for a different reason: it is 88 MB of encoder
+weights that most clones will never load. The curl commands that fetch it
+are in `requirements-embeddings.txt`.
 
 ## License
 

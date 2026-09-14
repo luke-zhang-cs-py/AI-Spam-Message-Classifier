@@ -1,10 +1,29 @@
 [run]
 omit =
     tests/*
-    # Developer scripts, not shipped code.
+    # Developer scripts, not shipped code. tools/refresh_figures.py keeps the
+    # published figures true; tools/compare_backends.py measures whether the
+    # optional embedding backend is worth installing. Both are run by hand,
+    # and compare_backends needs the extras the default install omits.
     tools/*
 
 # Without this the test files counted as covered source and padded the total:
 # 79% reported against 68% of the actual modules. Every other project in this
 # family omits them, and a coverage figure that includes its own tests is
 # measuring the wrong thing.
+
+[report]
+exclude_lines =
+    # Re-listed, because setting exclude_lines replaces the default list
+    # rather than adding to it -- and two modules here already carry the
+    # pragma, which would silently stop working.
+    pragma: no cover
+    # The script entry points: `sys.exit(main())`, and in app.py a print and
+    # an `app.run()`. Importing a module under test must not start a server,
+    # so the block cannot execute in the suite by construction. Excluded
+    # here rather than pragma'd file by file, which is what the other Flask
+    # projects in this family do. What the block *calls* is covered
+    # directly, in tests/test_cli_entry_points.py; it is the two or three
+    # lines of process startup around it that are not.
+    if __name__ == .__main__.:
+    raise NotImplementedError

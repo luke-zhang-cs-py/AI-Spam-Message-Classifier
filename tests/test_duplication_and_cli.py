@@ -110,6 +110,45 @@ def test_the_split_is_defined_once():
         assert getattr(trainer, name) is getattr(allinone, name), name
 
 
+def test_both_facades_re_export_the_same_pipeline_names():
+    """Adding one name to `spamlib` means editing two `__all__` lists and
+    two import statements, and nothing checked that both were done.
+
+    Shotgun surgery, and the kind that fails quietly: `app.py` reaches for
+    its names through `spam_classifier_all_in_one`, so a name added to one
+    façade and not the other leaves the second entry point missing a
+    function it looks like it has. It happened while the optional backend
+    was being wired in -- `vectorize` and `wants_raw_text` went into one
+    list before the other.
+
+    The trainer legitimately exports three names the all-in-one does not
+    (`DATA_DIR`, `DATA_PATH`, `LEGACY_DATA_PATH`), and the all-in-one two
+    the trainer does not (its demo and prompt runners), so the claim is
+    about the shared pipeline rather than equality of the two lists.
+    """
+    import spamlib
+
+    only_allinone = {"run_training_and_demo", "run_interactive"}
+    shared = set(allinone.__all__) - only_allinone - {"main"}
+
+    missing = sorted(shared - set(trainer.__all__))
+    assert not missing, f"the trainer does not re-export: {missing}"
+
+    for name in sorted(shared):
+        assert hasattr(trainer, name), f"{name} is listed but absent"
+        assert hasattr(allinone, name), f"{name} is listed but absent"
+
+    # Identity, not equality: a name that spamlib owns must be the *same
+    # object* in both façades, not two things that share a spelling.
+    # load_artifacts and save_model are excluded because they are
+    # deliberately per-module wrappers -- see either file for why.
+    wrappers = {"load_artifacts", "save_model"}
+    for name in sorted(shared - wrappers):
+        if hasattr(spamlib, name):
+            assert getattr(trainer, name) is getattr(spamlib, name), name
+            assert getattr(allinone, name) is getattr(spamlib, name), name
+
+
 def test_the_trainer_states_no_recipe_of_its_own():
     """The structural half.
 

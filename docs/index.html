@@ -362,22 +362,24 @@ footer a { color: inherit; }
  * `python tools/refresh_figures.py` rewrites them. */
 
 var MODULES = [
-  { name: 'spamlib.py',                    lines: 568, stmts: 195, missed:  6, does: 'the one implementation: normalising, model choice, the tuned threshold' },
-  { name: 'app.py',                        lines: 357, stmts: 127, missed:  8, does: 'the web UI, five endpoints, and the per-word explanation' },
-  { name: 'embeddings.py',                 lines: 269, stmts:  80, missed:  1, does: 'the optional transformer backend, off by default and measured' },
-  { name: 'spam_classifier_all_in_one.py', lines: 192, stmts:  63, missed: 39, does: 'the end-to-end demo and CLI; the pipeline itself moved to spamlib' },
-  { name: 'train_spam_classifier.py',      lines: 111, stmts:  34, missed: 14, does: 'trains both models, compares them, saves the winner' },
-  { name: 'classify.py',                   lines:  72, stmts:  31, missed: 13, does: 'one message from the command line, or an interactive loop' }
+  { name: 'spamlib.py',                    lines: 568, stmts: 195, missed:  0, does: 'the one implementation: normalising, model choice, the tuned threshold' },
+  { name: 'app.py',                        lines: 372, stmts: 121, missed:  0, does: 'the web UI, five endpoints, and the per-word explanation' },
+  { name: 'embeddings.py',                 lines: 279, stmts:  80, missed:  0, does: 'the optional transformer backend, off by default and measured' },
+  { name: 'spam_classifier_all_in_one.py', lines: 197, stmts:  64, missed:  0, does: 'the end-to-end demo and CLI; the pipeline itself moved to spamlib' },
+  { name: 'classify.py',                   lines: 104, stmts:  34, missed:  0, does: 'one message from the command line, or an interactive loop' },
+  { name: 'train_spam_classifier.py',      lines: 111, stmts:  34, missed:  0, does: 'trains both models, compares them, saves the winner' }
 ];
 
 var TESTS = [
-  { file: 'test_embeddings.py',          n: 37, of: 'the optional backend, almost all of it without torch installed' },
-  { file: 'test_app.py',                 n: 29, of: 'the five endpoints, the caps, and the vanishing metrics' },
-  { file: 'test_duplication_and_cli.py', n: 23, of: 'that the three entry points share one recipe' },
+  { file: 'test_embeddings.py',          n: 39, of: 'the optional backend, almost all of it without torch installed' },
+  { file: 'test_app.py',                 n: 32, of: 'the five endpoints, the caps, and the vanishing metrics' },
+  { file: 'test_duplication_and_cli.py', n: 24, of: 'that the three entry points share one recipe' },
+  { file: 'test_cli_entry_points.py',    n: 21, of: 'both command lines driven in process, where coverage can see them' },
+  { file: 'test_degraded_paths.py',      n: 11, of: 'the fallback corpus, an unreachable floor, a model with no weights' },
   { file: 'test_published_figures.py',   n: 11, of: 'the numbers on this page, against a fresh measurement' }
 ];
 
-var TEST_LINES = 1618;
+var TEST_LINES = 2394;
 
 /* Which interpreter produced the statement counts above. It matters: coverage
  * counts a `with` block or a multi-line call differently between versions, so

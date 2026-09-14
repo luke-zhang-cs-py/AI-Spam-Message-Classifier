@@ -210,11 +210,19 @@ def explainable_width(vectorizer):
     `lexical_width`, because the embedding columns carry no per-word
     meaning. Read by attribute so app.py does not import the optional
     module -- the whole point of which is not being imported.
+
+    The test is `is None`, not truthiness. `lexical_width` is 0 on a
+    SemanticFeatures built with no lexical half at all, and the earlier
+    `if width:` read that 0 as "this is a plain vectoriser, explain
+    everything" -- so an embeddings-only backend reported all 384 dimensions
+    as explainable words, which is the exact opposite of what the boundary
+    is for. Absent attribute means tf-idf; present-and-zero means there is
+    genuinely nothing to explain.
     """
     width = getattr(vectorizer, "lexical_width", None)
-    if width:
-        return int(width)
-    return len(vectorizer.get_feature_names_out())
+    if width is None:
+        return len(vectorizer.get_feature_names_out())
+    return int(width)
 
 
 def classify(message, model, vectorizer):
@@ -251,9 +259,16 @@ def known_tokens(vec, vectorizer):
     its columns are non-zero for every message, and the page would report
     "384 known tokens" for a message of pure gibberish. Counted over the
     lexical columns only, which is what the label on the page means.
+
+    Defers to `explainable_width` rather than repeating its lookup. The two
+    functions had the same `getattr(..., "lexical_width", None)` and the
+    same truthiness test written out separately, which is how they would
+    have come to disagree about where the boundary is -- and they were
+    already wrong in the same way, which is the other thing duplicated
+    logic gets you.
     """
-    width = getattr(vectorizer, "lexical_width", None)
-    if not width:
+    width = explainable_width(vectorizer)
+    if width >= vec.shape[1]:
         return int(vec.nnz)
     return int((vec.tocoo().col < width).sum())
 

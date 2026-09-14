@@ -203,6 +203,67 @@ def test_an_empty_batch_is_refused(client):
     assert client.post("/api/batch", json={"messages": ["  ", ""]}).status_code == 400
 
 
+def test_one_enormous_message_inside_a_legal_batch_is_refused(client):
+    """The per-message cap in the batch path, which is a separate rule from
+    the count cap above it.
+
+    Three messages is well under MAX_BATCH, so the count check passes and
+    the length check is the one that has to catch this. Without it, a batch
+    of two harmless lines and one 500 KB line is hundreds of megabytes of
+    vectorising in a request that looks trivial.
+    """
+    res = client.post("/api/batch",
+                      json={"messages": [HAM, "free " * 100000, SPAM]})
+    assert res.status_code == 400
+    assert "capped at" in res.get_json()["error"]
+
+
+# ---------------------------------------------------- the explanation, edges
+
+def test_a_model_with_no_weights_explains_nothing_rather_than_raising():
+    """`token_weights` reads `coef_` or `feature_log_prob_`, and returns an
+    empty list if the model has neither.
+
+    Not decoration: the README points at `MLPClassifier` as a drop-in swap
+    and an MLP has neither attribute. Losing the explanation panel is the
+    documented degradation; what it must not do is 500.
+    """
+    class Opaque:
+        """Predicts, but exposes no linear weights to explain it with."""
+
+        classes_ = [0, 1]
+
+        def predict(self, X):
+            return [1] * X.shape[0]
+
+    _model, vectorizer = web.ensure_model()
+    assert web.token_weights(SPAM, Opaque(), vectorizer) == []
+
+    served = web.classify(SPAM, Opaque(), vectorizer)
+    assert served["label"] == "spam"
+    assert served["tokens"] == []
+    assert served["confidence"] is None, (
+        "a model with no predict_proba should report no confidence")
+
+
+def test_a_cold_cache_does_not_crash_reading_the_saved_backend():
+    """`retrain_with_embeddings` prefers the loaded vectorizer and falls back
+    to the one on disk, which is the state just after a restart.
+
+    This half only checks the shipped tf-idf artifact answers False without
+    raising. It cannot fail on its own -- False is also what a broken
+    version returns -- and it is not trying to: the discriminating case
+    needs an *embedding-backed* artifact on disk, so it lives in
+    tests/test_embeddings.py where the fake encoder is, and asserts True.
+    """
+    web.reset()
+    assert web._state["vectorizer"] is None
+    try:
+        assert web.retrain_with_embeddings() is False
+    finally:
+        web.reset()
+
+
 # -------------------------------------------------------------- the model
 
 def test_cleaning_is_what_the_cli_does(client):

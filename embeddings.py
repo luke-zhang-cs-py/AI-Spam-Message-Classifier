@@ -219,16 +219,26 @@ class SemanticFeatures:
         return self._build(list(texts), fit=False)
 
     def _build(self, texts, fit):
-        dense = encode(texts, self.model_dir)
-        self.dimension = int(dense.shape[1])
+        """The feature matrix, always as CSR.
+
+        Always, including when there is no lexical half. It used to return
+        the raw dense array in that case, which made one method have two
+        return types and cost callers the sparse interface: `app.classify`
+        asks the matrix for `.nnz`, and an ndarray does not have it, so an
+        embeddings-only vectoriser reached the web app as an
+        AttributeError. sklearn's estimators take either, so nothing wanted
+        the dense form; it was just what `encode` happened to hand back.
+        """
+        embedded = encode(texts, self.model_dir)
+        self.dimension = int(embedded.shape[1])
         if self.lexical is None:
-            return dense
+            return csr_matrix(embedded)
 
         cleaned = self._cleaned(texts)
-        sparse = (self.lexical.fit_transform(cleaned) if fit
-                  else self.lexical.transform(cleaned))
-        self.lexical_width = int(sparse.shape[1])
-        return hstack([sparse, csr_matrix(dense)]).tocsr()
+        lexical = (self.lexical.fit_transform(cleaned) if fit
+                   else self.lexical.transform(cleaned))
+        self.lexical_width = int(lexical.shape[1])
+        return hstack([lexical, csr_matrix(embedded)]).tocsr()
 
     def _cleaned(self, texts):
         if self.cleaner is None:

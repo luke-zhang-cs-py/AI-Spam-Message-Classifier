@@ -47,26 +47,58 @@ def classify(message: str, model, vectorizer) -> str:
     return f"{label.upper()} {rest}".strip()
 
 
-def main():
+def run_interactive(model, vectorizer, read=None):
+    """Classify messages typed at a prompt until Ctrl-C or EOF.
+
+    `read` is a parameter for the same reason it is one in
+    `spam_classifier_all_in_one.run_interactive`: this loop used to call
+    `input()` directly, which put the whole interactive half of an
+    interactive tool out of reach of any test. It was the largest uncovered
+    block in the project and the one most likely to be broken without
+    anybody noticing, because the only way to run it was by hand.
+
+    It defaults to None and resolves to `input` here rather than defaulting
+    to `read=input` in the signature. A default argument is evaluated once,
+    when the module is imported, so `read=input` captures the builtin as it
+    was at import time and quietly ignores any later replacement of it --
+    including the one a test harness installs.
+
+    EOFError is caught alongside KeyboardInterrupt. A piped or closed stdin
+    raises the former, and the version that caught only the latter ended a
+    `classify.py < /dev/null` with a traceback.
+
+    The two loops in this project stay separate on purpose: the all-in-one
+    prints the probability and the cut, this one prints the shared verdict
+    in upper case. Same decision, two deliberate renderings.
+    """
+    reader = input if read is None else read
+    print("Spam classifier — type a message and press Enter (Ctrl+C to quit)\n")
+    while True:
+        try:
+            message = reader("> ")
+        except (EOFError, KeyboardInterrupt):
+            print("\nBye!")
+            return
+        if message.strip():
+            print(" ", classify(message, model, vectorizer))
+
+
+def main(argv=None, read=None):
+    """`argv` excludes the program name, like `sys.argv[1:]`."""
+    arguments = sys.argv[1:] if argv is None else list(argv)
+
     model, vectorizer = load_artifacts()
     if model is None:
         print("Model not found. Run `python train_spam_classifier.py` first.")
         return 1
 
-    if len(sys.argv) > 1:
-        message = " ".join(sys.argv[1:])
-        print(classify(message, model, vectorizer))
+    if arguments:
+        print(classify(" ".join(arguments), model, vectorizer))
         return 0
 
-    print("Spam classifier — type a message and press Enter (Ctrl+C to quit)\n")
-    try:
-        while True:
-            message = input("> ")
-            if message.strip():
-                print(" ", classify(message, model, vectorizer))
-    except KeyboardInterrupt:
-        print("\nBye!")
+    run_interactive(model, vectorizer, read=read)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

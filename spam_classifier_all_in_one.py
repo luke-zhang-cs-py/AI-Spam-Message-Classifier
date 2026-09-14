@@ -124,17 +124,22 @@ def run_training_and_demo(verbose=True, embeddings=False):
     return model, vectorizer
 
 
-def run_interactive(model, vectorizer, read=input):
+def run_interactive(model, vectorizer, read=None):
     """Classify messages typed at a prompt until EOF or an empty line.
 
     `read` is a parameter so this is testable without a terminal. It used to
     call input() directly, which made the loop unreachable from a test and
     therefore unverified.
+
+    None rather than `read=input` in the signature: a default is evaluated
+    once at import, so `read=input` captures the builtin as it was then and
+    ignores any later replacement, including a test harness's.
     """
+    reader = input if read is None else read
     print("Type a message and press enter. Empty line or Ctrl-C to quit.")
     while True:
         try:
-            message = read("> ").strip()
+            message = reader("> ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             return
@@ -146,7 +151,7 @@ def run_interactive(model, vectorizer, read=input):
                  getattr(model, "threshold", 0.5)))
 
 
-def main(argv=None):
+def main(argv=None, read=None):
     parser = argparse.ArgumentParser(description="Train and demo the filter.")
     parser.add_argument("--interactive", action="store_true",
                         help="classify messages typed at a prompt")
@@ -184,7 +189,7 @@ def main(argv=None):
 
     model, vectorizer = run_training_and_demo(embeddings=args.embeddings)
     if args.interactive:
-        run_interactive(model, vectorizer)
+        run_interactive(model, vectorizer, read=read)
     return 0
 
 

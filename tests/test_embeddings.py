@@ -570,6 +570,35 @@ def test_the_retrain_button_does_not_change_the_backend(encoder, corpus,
     assert web.retrain_with_embeddings() is False
 
 
+def test_a_cold_cache_reads_the_backend_off_the_saved_artifact(
+        encoder, corpus, monkeypatch, tmp_path):
+    """The fallback in `retrain_with_embeddings`, with a discriminating fixture.
+
+    There is a companion test in test_app.py that clears the cache and
+    checks the answer is False against the shipped tf-idf artifact. On its
+    own that one is vacuous: False is also what the bug returns, so
+    replacing the whole `clf.load_artifacts()[1]` line with `None` leaves it
+    green. The answer has to be *True* for the test to be able to fail,
+    which means an embedding-backed artifact has to be the thing on disk.
+    """
+    import app as web
+    import spam_classifier_all_in_one as allinone
+
+    model, vectorizer = spamlib.train_and_evaluate(corpus, verbose=False,
+                                                   embeddings=True)
+    monkeypatch.setattr(allinone, "MODEL_PATH", str(tmp_path / "m.joblib"))
+    monkeypatch.setattr(allinone, "VECTORIZER_PATH", str(tmp_path / "v.joblib"))
+    allinone.save_model(model, vectorizer)
+
+    web.reset()
+    try:
+        assert web._state["vectorizer"] is None, "the cache was not cold"
+        assert web.retrain_with_embeddings() is True, (
+            "a restart forgets that the saved model uses embeddings")
+    finally:
+        web.reset()
+
+
 def test_the_app_scores_a_raw_text_backend_on_raw_text(encoder, corpus):
     """`evaluate` used to split on the normalised column unconditionally."""
     import app as web
@@ -605,6 +634,39 @@ def test_the_flag_prints_the_fix_rather_than_a_traceback(monkeypatch, capsys):
         assert module.main(["--embeddings"]) == 1
         printed = capsys.readouterr()
         assert "requirements-embeddings.txt" in printed.err, module.__name__
+
+
+def test_both_clis_train_with_the_backend_when_it_is_available(
+        encoder, monkeypatch, tmp_path):
+    """The other side of the availability check.
+
+    Every other test of `--embeddings` drives the *refusal*, so the branch
+    where the backend is present and training actually proceeds with it was
+    the one uncovered path left in either CLI -- the flag's whole purpose,
+    reached only by the code nothing exercised.
+
+    Pinned with a fake encoder rather than the real one so this runs in CI,
+    where the extras are not installed. `missing_requirement` is what the
+    CLIs consult, so that is what gets answered; `load_encoder` is already
+    faked by the fixture.
+    """
+    import spam_classifier_all_in_one as allinone
+
+    monkeypatch.setattr(embeddings, "missing_requirement",
+                        lambda model_dir=None: None)
+    monkeypatch.setattr(trainer, "MODEL_PATH", str(tmp_path / "m.joblib"))
+    monkeypatch.setattr(trainer, "VECTORIZER_PATH", str(tmp_path / "v.joblib"))
+    monkeypatch.setattr(allinone, "MODEL_PATH", str(tmp_path / "m2.joblib"))
+    monkeypatch.setattr(allinone, "VECTORIZER_PATH", str(tmp_path / "v2.joblib"))
+
+    assert trainer.main(["--embeddings", "--quiet"]) == 0
+    _model, vectorizer = trainer.load_artifacts()
+    assert spamlib.wants_raw_text(vectorizer), (
+        "--embeddings was accepted and then trained without them")
+
+    encoder.seen.clear()
+    assert allinone.main(["--embeddings"]) == 0
+    assert encoder.seen, "the all-in-one never reached the encoder"
 
 
 def test_classifying_takes_no_backend_flag():
