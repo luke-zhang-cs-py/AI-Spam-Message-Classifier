@@ -1,0 +1,36 @@
+# The optional sentence-embedding backend (`--embeddings`).
+#
+# Its own file rather than an extra in requirements.txt because of the size:
+# torch is about two gigabytes installed, against roughly sixty megabytes for
+# everything the default path needs. CI installs requirements.txt and the
+# default path is what it tests; nothing here is needed to run, train, or test
+# the filter.
+#
+# What it buys, measured on the 412-message corpus: F1 0.853 against 0.850
+# for tf-idf alone, and 0.833 for embeddings on their own. Read embeddings.py
+# before deciding the install is worth it -- the honest answer today is
+# "probably not, unless the corpus is going to grow a lot".
+#
+#     pip install -r requirements-embeddings.txt
+#
+# The weights are not fetched by pip and are not in the repository. From the
+# project root:
+#
+#     mkdir -p models/all-MiniLM-L6-v2/1_Pooling
+#     BASE=https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main
+#     for f in config.json modules.json sentence_bert_config.json \
+#              special_tokens_map.json tokenizer.json tokenizer_config.json \
+#              vocab.txt model.safetensors; do
+#         curl -L -o "models/all-MiniLM-L6-v2/$f" "$BASE/$f"
+#     done
+#     curl -L -o models/all-MiniLM-L6-v2/1_Pooling/config.json \
+#          "$BASE/1_Pooling/config.json"
+#
+# Loaded from that directory rather than by hub id on purpose: a filter that
+# reads someone's text messages should not need the network to do it, and on
+# some networks the hub is not reachable anyway. Point SPAM_EMBEDDING_MODEL
+# at a different directory to use another encoder.
+
+sentence-transformers>=3.0
+torch>=2.2
+transformers>=4.40

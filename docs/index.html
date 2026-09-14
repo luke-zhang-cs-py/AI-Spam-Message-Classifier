@@ -193,17 +193,17 @@ footer a { color: inherit; }
 
 <!-- ==================================================== the result -->
 <section class="panel">
-  <h2>The result, and the three reasons to distrust it</h2>
+  <h2>The result, and the four reasons to read it carefully</h2>
   <p class="sub">
-    Both models, scored on the same held-out split. Read the table, then read
-    what is under it — the numbers are real, and they describe this dataset
-    rather than the world.
+    Every candidate, scored out of fold at its own chosen threshold. Read the
+    table, then read what is under it — the numbers are real, and they
+    describe this dataset rather than the world.
   </p>
   <table>
-    <caption>A 25% split of 81 messages. One test message is worth
-      <span id="perMessage"></span> percentage points of accuracy.</caption>
+    <caption id="modelCaption"></caption>
     <thead>
-      <tr><th>Model</th><th class="num">Accuracy</th><th class="num">Precision</th>
+      <tr><th>Model</th><th class="num">Cut</th><th class="num">Accuracy</th>
+          <th class="num">Precision</th>
           <th class="num">Recall</th><th class="num">F1</th><th>Confusion</th></tr>
     </thead>
     <tbody id="modelBody"></tbody>
@@ -211,42 +211,39 @@ footer a { color: inherit; }
 
   <div class="split">
     <div>
-      <h3>1. The two models are tied, and that is the finding</h3>
+      <h3>1. Precision is not a result here, it is the constraint</h3>
       <p>
-        They do not merely score the same — they produce the
-        <strong>identical confusion matrix</strong>, so they make the same
-        call on all 21 test messages, and miss the same two. Two very
-        different algorithms agreeing perfectly is a symptom of the data, not
-        a strong model: the spam here is separable by obvious keywords, so
-        almost any classifier lands in the same place.
+        Every row sits at almost exactly 0.900 because that is the floor the
+        threshold was chosen against, not because four models independently
+        arrived at the same precision. Reading it as an achievement is a
+        category error. <strong>Recall is the number that varies</strong>, and
+        it is what the models are actually being compared on: how much spam
+        can each one catch without crossing the line.
       </p>
     </div>
     <div>
-      <h3>2. "Best model" is a coin toss</h3>
+      <h3>2. The two Naive Bayes variants are still tied</h3>
       <p>
-        The trainer compares with <code>f1 &gt; best_score</code> and
-        iterates Naive Bayes first, so on a tie the first one wins. It
-        reports Naive Bayes as best. That is the iteration order presented as
-        a result.
+        Not merely equal scores — an <strong>identical confusion
+        matrix</strong>, the same call on every message in the corpus. That
+        was a finding about the data when every classifier agreed. It is
+        narrower now: logistic regression on the same features is nine points
+        of F1 behind, so the corpus has stopped being separable by anything
+        at all.
       </p>
     </div>
     <div>
-      <h3>3. The dataset is 81 messages</h3>
-      <p>
-        40 spam, 41 ham, and <em>written</em> rather than collected — clean,
-        unambiguous, and free of the obfuscation real spam uses
-        (<code>Fr33</code>, unicode lookalikes, image-only payloads). The
-        metrics will swing noticeably if you change
-        <code>random_state</code>.
-      </p>
+      <h3>3. Written rather than collected</h3>
+      <p id="corpusNote"></p>
     </div>
     <div>
-      <h3>What it does get right</h3>
+      <h3>4. The transformer is worth one message</h3>
       <p>
-        No false positives: no real message was called spam, at the cost of
-        missing 2 of 10 spam. For a spam filter that is the right side to err
-        on — a missed spam is an annoyance, a misfiled real message is a lost
-        message.
+        The optional embedding backend scores F1 0.853 against 0.850, and the
+        confusion matrices say what that means: <strong>one more spam caught
+        out of 179</strong>, for about two gigabytes of dependencies. It is
+        off by default, and the measurement is
+        <code>tools/compare_backends.py</code> rather than a claim.
       </p>
     </div>
   </div>
@@ -263,11 +260,17 @@ footer a { color: inherit; }
   </p>
   <pre id="explainSample"></pre>
   <p>
-    The two models keep that weight in different places —
+    The models keep that weight in different places —
     <code>coef_</code> for logistic regression, the difference between the
     two rows of <code>feature_log_prob_</code> for Naive Bayes — and
     <code>token_weights()</code> handles both, so the explanation does not
     depend on which model happened to win the tie.
+  </p>
+  <p>
+    With the optional embedding backend loaded the explanation stops at the
+    lexical columns. The other 384 carry no per-word meaning: "dimension 137
+    contributed +0.04" is not an explanation, it is a number with a label on
+    it, and listing them would bury the words that can be read.
   </p>
 </section>
 
@@ -359,19 +362,22 @@ footer a { color: inherit; }
  * `python tools/refresh_figures.py` rewrites them. */
 
 var MODULES = [
-  { name: 'spam_classifier_all_in_one.py', lines: 366, stmts: 135, missed: 39, does: 'the whole pipeline in one file, dataset inlined — the canonical recipe' },
-  { name: 'app.py',                        lines: 295, stmts: 112, missed:  8, does: 'the web UI, five endpoints, and the per-word explanation' },
-  { name: 'train_spam_classifier.py',      lines: 179, stmts:  95, missed: 13, does: 'trains both models, compares them, saves the winner' },
+  { name: 'spamlib.py',                    lines: 568, stmts: 195, missed:  6, does: 'the one implementation: normalising, model choice, the tuned threshold' },
+  { name: 'app.py',                        lines: 357, stmts: 127, missed:  8, does: 'the web UI, five endpoints, and the per-word explanation' },
+  { name: 'embeddings.py',                 lines: 269, stmts:  80, missed:  1, does: 'the optional transformer backend, off by default and measured' },
+  { name: 'spam_classifier_all_in_one.py', lines: 192, stmts:  63, missed: 39, does: 'the end-to-end demo and CLI; the pipeline itself moved to spamlib' },
+  { name: 'train_spam_classifier.py',      lines: 111, stmts:  34, missed: 14, does: 'trains both models, compares them, saves the winner' },
   { name: 'classify.py',                   lines:  72, stmts:  31, missed: 13, does: 'one message from the command line, or an interactive loop' }
 ];
 
 var TESTS = [
+  { file: 'test_embeddings.py',          n: 37, of: 'the optional backend, almost all of it without torch installed' },
   { file: 'test_app.py',                 n: 29, of: 'the five endpoints, the caps, and the vanishing metrics' },
   { file: 'test_duplication_and_cli.py', n: 23, of: 'that the three entry points share one recipe' },
-  { file: 'test_published_figures.py',   n:  9, of: 'the numbers on this page, against a fresh measurement' }
+  { file: 'test_published_figures.py',   n: 11, of: 'the numbers on this page, against a fresh measurement' }
 ];
 
-var TEST_LINES = 801;
+var TEST_LINES = 1618;
 
 /* Which interpreter produced the statement counts above. It matters: coverage
  * counts a `with` block or a multi-line call differently between versions, so
@@ -382,33 +388,44 @@ var TEST_LINES = 801;
 var MEASURED_WITH = 'Python 3.14';
 var ROUTE_COUNT = 5;
 
-/* From dataset.csv and a run of the trainer. */
-var DATA = { messages: 81, spam: 40, ham: 41, testSplit: 21, testFraction: 0.25 };
+/* From data/*.csv and a run of the trainer. Regenerate with
+ * `python tools/compare_backends.py`, which scores every row of the table
+ * below under one shared split. */
+var DATA = { messages: 412, spam: 179, ham: 233, folds: 5, floor: 0.90 };
 
+/* Out-of-fold: every probability comes from a fold that did not train on the
+ * message it scores, so all 412 are held-out data exactly once. The last row
+ * is the optional embedding backend, which is off by default. */
 var MODELS = [
-  { name: 'Multinomial Naive Bayes', accuracy: 0.905, precision: 1.000,
-    recall: 0.800, f1: 0.889, tn: 11, fp: 0, fn: 2, tp: 8 },
-  { name: 'Logistic Regression',     accuracy: 0.905, precision: 1.000,
-    recall: 0.800, f1: 0.889, tn: 11, fp: 0, fn: 2, tp: 8 }
+  { name: 'Multinomial Naive Bayes', threshold: 0.4559, accuracy: 0.876,
+    precision: 0.900, recall: 0.804, f1: 0.850, tn: 217, fp: 16, fn: 35, tp: 144 },
+  { name: 'Complement Naive Bayes', threshold: 0.5222, accuracy: 0.876,
+    precision: 0.900, recall: 0.804, f1: 0.850, tn: 217, fp: 16, fn: 35, tp: 144 },
+  { name: 'Logistic Regression', threshold: 0.4681, accuracy: 0.820,
+    precision: 0.901, recall: 0.659, f1: 0.761, tn: 220, fp: 13, fn: 61, tp: 118 },
+  { name: 'Logistic Regression (balanced) + embeddings', threshold: 0.6656,
+    accuracy: 0.879,
+    precision: 0.901, recall: 0.810, f1: 0.853, tn: 217, fp: 16, fn: 34, tp: 145 }
 ];
 
 var STEPS = [
-  '<strong>Clean</strong> — lowercase, and strip URLs, digits and punctuation.',
-  '<strong>Vectorise</strong> — <code>TfidfVectorizer</code> over unigrams and bigrams, which down-weights common English words.',
-  '<strong>Fit two models</strong> — <code>MultinomialNB</code> and <code>LogisticRegression</code>, on the same split.',
-  '<strong>Score</strong> — accuracy, precision, recall, F1 and a confusion matrix on the held-out quarter.',
-  '<strong>Keep the better one</strong> — by F1, which on a tie means the first one tried.',
-  '<strong>Infer</strong> — a new message is cleaned and vectorised the same way, then scored, then explained.'
+  '<strong>Normalise</strong> — fold case, then replace each noisy part with a token for its <em>kind</em>: <code>urltoken</code>, <code>moneytoken</code>, <code>shortcodetoken</code>. The earlier version deleted them, which threw away the most informative thing in a smishing text.',
+  '<strong>Vectorise</strong> — <code>TfidfVectorizer</code> over unigrams and bigrams, sublinear, no stop-word list: "free", "win" and "call" are the signal here.',
+  '<strong>Compare three estimators</strong> — two Naive Bayes variants and logistic regression, each scored with <code>cross_val_predict</code> so no message is judged by a fold that trained on it.',
+  '<strong>Choose the threshold</strong> — the cut with the best F1 whose precision stays at or above the floor. Predicting at 0.5 leaves the most consequential dial untouched.',
+  '<strong>Keep the best</strong> — by F1, then by precision. The threshold is wrapped into the model, so an artifact cannot forget the cut it was chosen with.',
+  '<strong>Infer</strong> — a new message goes through the same normalising, then scored against that cut, then explained word by word.'
 ];
 
-/* The six constants the three entry points must agree on. */
+/* The six constants the three entry points must agree on, checked with `is`
+ * rather than equality by tests/test_duplication_and_cli.py. */
 var CONSTANTS = [
-  ['TEST_SIZE', '0.25 — the held-out quarter'],
-  ['RANDOM_STATE', '42 — so the split is the same every run'],
+  ['TEST_SIZE', '0.25 — the quarter the web UI scores against'],
+  ['RANDOM_STATE', '42 — so the folds are the same every run'],
   ['NGRAM_RANGE', '(1, 2) — unigrams and bigrams'],
   ['MIN_DF', '1 — every token counts, on a dataset this small'],
-  ['STOP_WORDS', '"english"'],
-  ['MAX_ITER', '1000 — for the logistic regression']
+  ['STOP_WORDS', 'None — the stop words are the evidence'],
+  ['MAX_ITER', '2000 — for the logistic regression']
 ];
 
 /* Authored prose with intentional markup, kept out of esc() deliberately --
@@ -441,9 +458,9 @@ var BUGS = [
 ];
 
 var NEXT = [
-  '<strong>A real corpus.</strong> The UCI SMS Spam Collection is about 5,570 collected messages in the same <code>label,text</code> shape, which is roughly seventy times this dataset and far harder.',
-  '<strong>Cross-validation rather than one split.</strong> With 21 test messages, a single split is a coin-flip about which two spam messages land in it.',
-  '<strong>Break the tie honestly.</strong> If two models are indistinguishable on the evidence, the trainer should say so rather than report the one it tried first.',
+  '<strong>A collected corpus.</strong> The UCI SMS Spam Collection is about 5,570 collected texts in the same <code>label,text</code> shape — thirteen times this one, and not authored by anyone who knew what the filter would be looking for.',
+  '<strong>Break the tie honestly.</strong> The two Naive Bayes variants produce an identical confusion matrix, and the trainer still reports whichever it sorted first. Indistinguishable on the evidence should be said out loud rather than resolved by ordering.',
+  '<strong>Re-run the backend comparison as the corpus grows.</strong> The case for keeping the optional transformer is that its margin should widen with more data. That is a claim with an expiry date, and <code>tools/compare_backends.py</code> is what checks it.',
   '<strong>Other models are drop-in</strong> — <code>LinearSVC</code> and <code>MLPClassifier</code> swap straight in. Note <code>LinearSVC</code> has no <code>predict_proba</code>, so the confidence degrades to absent rather than failing.'
 ];
 
@@ -474,8 +491,8 @@ function drawTiles() {
      TESTS.length + ' files, ' + TEST_LINES.toLocaleString() + ' lines'],
     ['Coverage', Math.round(100 * COVERED / STMTS) + '%',
      COVERED.toLocaleString() + ' of ' + STMTS.toLocaleString() + ' statements'],
-    ['Accuracy', MODELS[0].accuracy.toFixed(3),
-     'on ' + DATA.testSplit + ' held-out messages'],
+    ['F1', MODELS[0].f1.toFixed(3),
+     'out of fold, precision held at ' + DATA.floor.toFixed(2)],
     ['The dataset', DATA.messages,
      DATA.spam + ' spam, ' + DATA.ham + ' ham'],
     ['Endpoints', ROUTE_COUNT, 'Flask, loopback, no auth']
@@ -487,8 +504,10 @@ function drawTiles() {
   }).join('');
 
   el('tilesNote').textContent =
-    'The accuracy tile is the one to be suspicious of, and the panel below ' +
-    'says why in three ways. Coverage is ' +
+    'The F1 tile is the one to read carefully, and the panel below says why ' +
+    'in four ways — starting with the fact that the precision beside it is ' +
+    'a constraint the threshold was chosen against, not a result. ' +
+    'Coverage is ' +
     Math.round(100 * COVERED / STMTS) + '%: the uncovered ' +
     (STMTS - COVERED) + ' statements are the printing — the interactive ' +
     'input() loop, the console report the trainer writes, and the ' +
@@ -545,9 +564,27 @@ function drawTests() {
 /* --------------------------------------------------------------- tables */
 
 function drawModels() {
-  el('perMessage').textContent = (100 / DATA.testSplit).toFixed(1);
+  /* Derived rather than typed. The caption under this table read "A 25%
+   * split of 81 messages" for a while after the corpus reached 412, which
+   * is why the guard now looks for typed message counts too. */
+  el('corpusNote').innerHTML =
+    DATA.ham + ' ham and ' + DATA.spam + ' spam across two shards, the ' +
+    'second of which is deliberately adversarial: obfuscation ' +
+    '(<code>Fr33</code>, unicode lookalikes), and near-misses like a real ' +
+    'delivery notice or a genuine one-time passcode. 26% of the ham carries ' +
+    'spam vocabulary against 46% of the spam, which is where the ' +
+    MODELS[0].fp + ' false positives come from. Still authored, though, and ' +
+    'authored examples are the ones somebody already thought of.';
+
+  el('modelCaption').innerHTML =
+    DATA.folds + '-fold out-of-fold scoring over all ' + DATA.messages +
+    ' messages, so one message is worth ' +
+    (100 / DATA.messages).toFixed(2) + ' percentage points of accuracy. ' +
+    'Each threshold is the one that maximises F1 while precision stays at ' +
+    'or above ' + DATA.floor.toFixed(2) + '.';
   el('modelBody').innerHTML = MODELS.map(function (m) {
     return '<tr><td>' + esc(m.name) + '</td>' +
+      '<td class="num">' + m.threshold.toFixed(4) + '</td>' +
       '<td class="num">' + m.accuracy.toFixed(3) + '</td>' +
       '<td class="num">' + m.precision.toFixed(3) + '</td>' +
       '<td class="num">' + m.recall.toFixed(3) + '</td>' +
@@ -653,9 +690,9 @@ el('footNote').textContent =
   'breaks elsewhere. Training takes under a second.';
 
 el('footNote').textContent += ' The statement counts were produced by ' +
-  MEASURED_WITH + ': coverage counts statements differently between versions, so the
-  figure is a property of the code and the interpreter together, and the check that
-  guards it compares only like with like.';
+  MEASURED_WITH + ': coverage counts statements differently between ' +
+  'versions, so the figure is a property of the code and the interpreter ' +
+  'together, and the check that guards it compares only like with like.';
 
 drawTiles();
 drawModules();

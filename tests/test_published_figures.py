@@ -23,11 +23,26 @@ file is present and skipped when it is not, rather than asserted against an
 empty measurement — which would "pass" by calling everything uncovered.
 
 `python tools/refresh_figures.py` rewrites whatever this finds wrong.
+
+Checking that the page *runs*
+-----------------------------
+Every check above reads the file as text, and for a while that was the whole
+story — with the result that the published page shipped an unterminated
+string literal, its script threw `SyntaxError` on load, and **none** of the
+JavaScript ran. Empty tiles, empty tables, empty charts, and a full set of
+green tests, because every figure in the data block was perfectly accurate
+and nothing had ever asked whether the page could read it.
+
+So two structural checks were added: that no string literal is left open at
+the end of a line, and that every element the script writes into exists in
+the markup. Neither needs a JavaScript engine, which this project does not
+depend on and should not start depending on for a static page.
 """
 import fnmatch
 import io
 import os
 import re
+import string
 import subprocess
 import sys
 
@@ -47,7 +62,9 @@ SKIP_DIRS = {".git", "__pycache__", "tests", "htmlcov", ".venv", "venv",
 # These are the only numbers on the page allowed to be wrong, because being
 # wrong is what they are about. Each one is asserted to still be present, so
 # an entry cannot quietly outlive the sentence it exempts.
-HISTORY = ()
+HISTORY = (
+    'split of 81 messages" for a while after the corpus reached 412',
+)
 
 
 @pytest.fixture(scope="module")
@@ -124,6 +141,133 @@ def has_coverage_data():
         return bool(cov.get_data().measured_files())
     except Exception:                                  # pragma: no cover
         return False
+
+
+# ---------------------------------------------------------- does it run?
+
+def script_body(page):
+    """Every <script> block on the page, concatenated."""
+    blocks = re.findall(r"<script[^>]*>(.*?)</script>", page, re.DOTALL)
+    return "\n".join(blocks)
+
+
+# A `/` after one of these is division; anywhere else it opens a regex
+# literal. The distinction matters because `/[&<>"]/g` is on this page, and a
+# scanner that read that `"` as the start of a string would report the rest
+# of the line as unterminated.
+_ENDS_A_VALUE = set(")]}") | set(string.ascii_letters + string.digits + "_$")
+
+_CLOSERS = {"single": "'", "double": '"', "template": "`", "regex": "/"}
+
+
+_OPENERS = {"'": "single", '"': "double", "`": "template"}
+
+
+def _step_in_code(text, index, previous):
+    """(state, next index, last significant char) for one character of code.
+
+    The state "comment" means the rest of the line is one, which the caller
+    takes as its cue to stop.
+    """
+    char = text[index]
+    pair = text[index:index + 2]
+    if pair == "//":
+        return "comment", len(text), previous
+    if pair == "/*":
+        return "block", index + 2, previous
+    if char == "/" and previous not in _ENDS_A_VALUE:
+        return "regex", index + 1, previous
+    if char in _OPENERS:
+        return _OPENERS[char], index + 1, previous
+    return "code", index + 1, previous if char.isspace() else char
+
+
+def _step_in_quotes(text, index, state):
+    """(state, next index, last significant char) inside a string or regex."""
+    char = text[index]
+    if char == "\\":
+        return state, index + 2, ""             # escaped: skip both
+    if char == _CLOSERS[state]:
+        # A closing quote or slash ends a value, so a `/` after it is
+        # division rather than the start of another regex.
+        return "code", index + 1, "x"
+    return state, index + 1, ""
+
+
+def _scan_line(text, state, previous):
+    """Run the scanner to the end of one line; return where it ended up."""
+    index = 0
+    while index < len(text):
+        if state == "code":
+            state, index, previous = _step_in_code(text, index, previous)
+            if state == "comment":
+                return "code", previous
+        elif state == "block":
+            if text[index:index + 2] == "*/":
+                state, index = "code", index + 2
+            else:
+                index += 1
+        else:
+            state, index, seen = _step_in_quotes(text, index, state)
+            previous = seen or previous
+    return state, previous
+
+
+def open_string_lines(source):
+    """Lines where a quoted string is still open at the newline.
+
+    A hand-written scanner, because the alternatives are a regex (which
+    cannot do this) or a JavaScript engine (which would mean depending on
+    node to test a static page). It tracks quotes, both comment forms, regex
+    literals and backslash escapes, and flags only single- and double-quoted
+    strings -- a template literal spanning lines is legal. It reports the
+    offending line's text rather than its number, which is the more useful
+    half of the answer.
+    """
+    flagged = []
+    state, previous = "code", ""
+    for text in source.splitlines():
+        state, previous = _scan_line(text, state, previous)
+        if state in ("single", "double"):
+            flagged.append(text.strip())
+            state = "code"                       # do not cascade
+    return flagged
+
+
+def test_the_pages_script_has_no_string_left_open_at_a_line_end(page):
+    """The failure this whole file did not catch.
+
+    `el('footNote').textContent += '...' + MEASURED_WITH + ': coverage counts`
+    ran on past the end of its line, which is a SyntaxError, which means the
+    browser discarded the entire script. Every figure on the page was correct
+    and every one of them rendered as nothing.
+    """
+    source = script_body(page)
+    assert source.strip(), "no <script> block was found, so this check is vacuous"
+    flagged = open_string_lines(source)
+    assert not flagged, (
+        "these lines leave a string literal open, so the browser throws "
+        "SyntaxError and none of the page's script runs:\n  "
+        + "\n  ".join(flagged))
+
+
+def test_every_element_the_script_writes_into_exists(page):
+    """A renamed id fails silently: `el(...)` returns null and the
+    assignment throws, taking the rest of the script with it.
+
+    Found while moving this page's model table onto computed captions -- the
+    kind of change where the markup and the script are edited in two places
+    and one of them is forgotten.
+    """
+    source = script_body(page)
+    wanted = set(re.findall(r"el\(\s*'([\w-]+)'\s*\)", source))
+    assert wanted, "no el() calls found, so this check is vacuous"
+
+    present = set(re.findall(r'id="([\w-]+)"', page))
+    missing = sorted(wanted - present)
+    assert not missing, (
+        f"the script writes into elements that are not in the markup: "
+        f"{missing}")
 
 
 def test_the_page_has_a_data_block_at_all(page):
@@ -267,17 +411,27 @@ def test_the_page_says_when_it_was_measured(page):
 def test_no_count_is_typed_outside_the_data_block(page):
     """A number typed into a sentence beside a number computed from the data
     is how the two come to disagree. The data block may hold counts;
-    everything else must derive them."""
+    everything else must derive them.
+
+    `messages` is in this pattern because it was missing from it. The page
+    carried the caption "A 25% split of 81 messages" for as long as the
+    corpus held 81 messages, and went on carrying it after the corpus grew
+    to 412 -- the exact failure this check exists to catch, walking straight
+    past a check that only looked for statements and tests.
+    """
     body = re.sub(r"var MODULES = \[.*?\n\];", "", page, flags=re.DOTALL)
     body = re.sub(r"var TESTS = \[.*?\n\];", "", body, flags=re.DOTALL)
     body = re.sub(r"var OMITTED = \[.*?\n\];", "", body, flags=re.DOTALL)
+    body = re.sub(r"var MODELS = \[.*?\n\];", "", body, flags=re.DOTALL)
+    body = re.sub(r"var DATA = \{.*?\};", "", body, flags=re.DOTALL)
     for sentence in HISTORY:
         assert sentence in page, (
             f"the history this check exempts is no longer on the page: "
             f"{sentence!r} -- take it out of HISTORY too")
         body = body.replace(sentence, "")
-    typed = re.findall(r"[\d,]{2,}\s*(?:executable\s+)?(?:statements|tests)\b",
-                       body)
+    typed = re.findall(
+        r"[\d,]{2,}\s*(?:executable\s+|collected\s+|real\s+)?"
+        r"(?:statements|tests|messages)\b", body)
     assert not typed, (
         f"these counts are typed into the page rather than computed from the "
         f"data block: {typed}")

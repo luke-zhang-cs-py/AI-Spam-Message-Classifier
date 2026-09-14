@@ -21,3 +21,10 @@ venv/
 .coverage
 htmlcov/
 .pytest_cache/
+
+# The optional sentence encoder. ~88 MB of weights, fetched with the curl
+# commands in requirements-embeddings.txt. Not committed for the same reason
+# the .joblib artifacts are not: a binary blob in git history that most
+# clones will never load, and GitHub would reject it over the 100 MB limit
+# soon enough anyway.
+models/

@@ -17,7 +17,7 @@ Endpoints
 GET  /                 the page
 POST /api/classify      body {message} -> verdict, confidence, token weights
 POST /api/batch         body {messages: [...]} -> one verdict per line
-POST /api/retrain       retrain from the embedded dataset and reload
+POST /api/retrain       retrain from data/ and reload, same backend
 GET  /api/model         which model is loaded, and its evaluation scores
 
 Binds to 127.0.0.1. Nothing here is authenticated, and messages people paste
@@ -68,6 +68,24 @@ def model_display_name(model):
     return type(model).__name__ if model is not None else None
 
 
+def retrain_with_embeddings():
+    """Whether a retrain should keep the optional embedding backend.
+
+    The retrain button must not change which features the model uses. Left
+    to the default it would: someone trains with `--embeddings`, opens the
+    page, presses Retrain, and gets a tf-idf model back with no indication
+    that the thing they installed two gigabytes for is no longer in play.
+
+    So the answer is read from what is currently loaded, and from the saved
+    artifact if nothing is. Called inside the lock, and deliberately before
+    `_state` is overwritten.
+    """
+    current = _state["vectorizer"]
+    if current is None:
+        current = clf.load_artifacts()[1]
+    return current is not None and clf.wants_raw_text(current)
+
+
 def ensure_model(force_retrain=False):
     """Load the saved artifacts, training them first if they are missing.
 
@@ -83,7 +101,8 @@ def ensure_model(force_retrain=False):
 
         df = clf.load_data()
         if model is None or vectorizer is None:
-            model, vectorizer = clf.train_and_evaluate(df)
+            model, vectorizer = clf.train_and_evaluate(
+                df, embeddings=retrain_with_embeddings())
             clf.save_model(model, vectorizer)
 
         # Scored whether it was just trained or loaded from disk. This used to
@@ -110,7 +129,10 @@ def evaluate(df, model, vectorizer):
     from sklearn.metrics import (accuracy_score, precision_score,
                                  recall_score, f1_score, confusion_matrix)
 
-    X = df["clean_text"]
+    # Whichever column this backend reads. The embedding half wants the
+    # message as written; splitting on the normalised column and feeding
+    # that to the encoder would quietly cost most of what it was added for.
+    X = df["text"] if clf.wants_raw_text(vectorizer) else df["clean_text"]
     y = df["label"].map({"ham": 0, "spam": 1})
     # clf's constants, not a second copy of the numbers: the quarter this
     # scores against is only held-out data if it is the same quarter the
@@ -118,7 +140,7 @@ def evaluate(df, model, vectorizer):
     _, X_test, _, y_test = train_test_split(
         X, y, test_size=clf.TEST_SIZE, random_state=clf.RANDOM_STATE, stratify=y)
 
-    preds = model.predict(vectorizer.transform(X_test))
+    preds = model.predict(vectorizer.transform(X_test.tolist()))
     return {
         "accuracy": round(float(accuracy_score(y_test, preds)), 3),
         "precision": round(float(precision_score(y_test, preds, zero_division=0)), 3),
@@ -148,9 +170,14 @@ def token_weights(message, model, vectorizer, limit=12):
     Positive pushes towards spam, negative towards ham. Only tokens actually
     present in the message have a non-zero TF-IDF, so this returns just the
     words that mattered.
+
+    With the optional embedding backend loaded the matrix has 384 further
+    columns, and they are left out on purpose: "dimension 137 contributed
+    +0.04" is not an explanation, it is a number with a label on it. The
+    lexical half is the half that can be read, so the story stops at
+    `lexical_width` -- see `explainable_width` below.
     """
-    cleaned = clf.clean_text(message)
-    vec = vectorizer.transform([cleaned])
+    vec = clf.vectorize(vectorizer, [message])
     if vec.nnz == 0:
         return []
 
@@ -163,20 +190,40 @@ def token_weights(message, model, vectorizer, limit=12):
         return []
 
     names = vectorizer.get_feature_names_out()
+    limit_column = explainable_width(vectorizer)
     row = vec.tocoo()
     contributions = [
         {"token": str(names[col]),
          "weight": round(float(val * weights[col]), 4),
          "tfidf": round(float(val), 4)}
         for col, val in zip(row.col, row.data)
+        if col < limit_column
     ]
     contributions.sort(key=lambda c: -abs(c["weight"]))
     return contributions[:limit]
 
 
+def explainable_width(vectorizer):
+    """How many leading columns correspond to a word a reader can see.
+
+    For tf-idf that is all of them. For the combined backend it is
+    `lexical_width`, because the embedding columns carry no per-word
+    meaning. Read by attribute so app.py does not import the optional
+    module -- the whole point of which is not being imported.
+    """
+    width = getattr(vectorizer, "lexical_width", None)
+    if width:
+        return int(width)
+    return len(vectorizer.get_feature_names_out())
+
+
 def classify(message, model, vectorizer):
+    # `cleaned` is still shown in the response: it is how the page explains
+    # what normalisation did to the message. It is no longer what gets
+    # vectorised, though -- clf.vectorize asks the backend what form it
+    # wants and normalises only if the answer is "cleaned".
     cleaned = clf.clean_text(message)
-    vec = vectorizer.transform([cleaned])
+    vec = clf.vectorize(vectorizer, [message])
     pred = int(model.predict(vec)[0])
 
     confidence = None
@@ -191,9 +238,24 @@ def classify(message, model, vectorizer):
         "cleaned": cleaned,
         "label": "spam" if pred == 1 else "ham",
         "confidence": confidence,
-        "knownTokens": int(vec.nnz),
+        "knownTokens": known_tokens(vec, vectorizer),
         "tokens": token_weights(message, model, vectorizer),
     }
+
+
+def known_tokens(vec, vectorizer):
+    """How many vocabulary terms the message actually hit.
+
+    `vec.nnz` was this number for as long as every column was a term. With
+    the embedding backend it is not: an embedding is dense, so all 384 of
+    its columns are non-zero for every message, and the page would report
+    "384 known tokens" for a message of pure gibberish. Counted over the
+    lexical columns only, which is what the label on the page means.
+    """
+    width = getattr(vectorizer, "lexical_width", None)
+    if not width:
+        return int(vec.nnz)
+    return int((vec.tocoo().col < width).sum())
 
 
 # ---------------------------------------------------------------------------
