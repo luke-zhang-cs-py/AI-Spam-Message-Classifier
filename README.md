@@ -5,6 +5,8 @@
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.12-blue.svg)](https://www.python.org/)
 
 **[Read the overview →](https://luke-zhang-cs-py.github.io/AI-Spam-Message-Classifier/)**
+(or open [`docs/index.html`](docs/index.html) directly if the live page
+won't load — it's the same file GitHub Pages serves)
 — the result and the four reasons to read it carefully, how a verdict is
 explained, and every bug this thing has had.
 
