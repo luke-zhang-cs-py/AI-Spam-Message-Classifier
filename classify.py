@@ -38,9 +38,15 @@ def classify(message: str, model, vectorizer) -> str:
 
     This used to reimplement predict_message -- same transform, same
     predict, same probability lookup -- and returned "SPAM (69.1%
-    confidence)" where the original returns "spam (confidence: 69.10%)". One
-    decision, three entry points, three spellings of the answer. The logic is
-    imported now; only the capitalisation is this file's own.
+    confidence)" of its own invention while the shared version returned a
+    differently formatted string. One decision, three entry points, three
+    spellings of the answer.
+
+    The logic is imported now, so this file only supplies the
+    capitalisation. `predict_message` itself no longer reports a confidence
+    figure at all -- it returns a bare "spam" or "ham" -- so `verdict` has no
+    text after the label, `rest` is always empty, and the actual output here
+    is just "SPAM" or "HAM".
     """
     verdict = predict_message(message, model, vectorizer)
     label, _, rest = verdict.partition(" ")

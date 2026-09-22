@@ -86,8 +86,17 @@ def test_the_web_app_cleans_text_the_same_way_as_the_cli():
 
 
 def test_the_split_is_defined_once():
-    """app.evaluate() rebuilds the trainer's split to score a loaded model.
-    That quarter is only held-out data if it is the *same* quarter.
+    """app.evaluate() used to rebuild the trainer's train_test_split to score
+    a loaded model -- against the *whole* dataframe train_and_evaluate() had
+    just fit the final estimator on. That "test" quarter was never held-out
+    data: it was a subset of the model's own training rows, so the numbers
+    shown in the UI were in-sample and optimistic.
+
+    It now delegates to spamlib.metrics(), which scores every row with an
+    out-of-fold prediction (a clone of the estimator fit on the other folds),
+    so a row is never scored by a model that trained on it. This checks that
+    the leaky rebuilt-split code has not crept back in, and keeps the
+    identity checks on the training constants the two pipelines still share.
 
     The previous version of this test did not look at the trainer at all,
     despite its name, and its final assertion was
@@ -97,8 +106,10 @@ def test_the_split_is_defined_once():
     """
     import app as web
     app_source = open(os.path.join(ROOT, "app.py"), encoding="utf-8").read()
-    assert "test_size=clf.TEST_SIZE" in app_source
-    assert "random_state=clf.RANDOM_STATE" in app_source
+    assert "import train_test_split" not in app_source, (
+        "evaluate() should score out-of-fold via spamlib.metrics(), not by "
+        "carving its own split out of data the model was already fit on")
+    assert "clf.metrics(" in app_source
     # Stated as identity, which is the real claim: app.py uses the canonical
     # module rather than a recipe of its own.
     assert web.clf is allinone

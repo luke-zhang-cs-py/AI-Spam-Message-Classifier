@@ -85,10 +85,11 @@
 
   </div>
 
-  <footer>Trained on 81 embedded sample messages, so the scores above describe a toy
-    dataset rather than real-world performance &mdash; a 25% split is only 21 test
-    messages. Swap in a real corpus (e.g. the UCI SMS Spam Collection) before trusting
-    these numbers.</footer>
+  <footer>Trained on the CSV corpus in <code>data/</code> (see Dataset above for its
+    current size) &mdash; there is no embedded sample set any more. The scores above
+    come from 5-fold cross-validation, not a single train/test split: every message is
+    scored only by a fold that did not train on it, so they reflect genuine held-out
+    performance on the current corpus rather than a fixed-size test slice.</footer>
 
 </div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>

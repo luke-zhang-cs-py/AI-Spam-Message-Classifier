@@ -141,7 +141,7 @@ from spam_classifier_all_in_one import load_artifacts, predict_message
 
 model, vectorizer = load_artifacts()
 print(predict_message("Congratulations, you won!", model, vectorizer))
-# spam (confidence: 77.23%)
+# 'spam' or 'ham' -- a bare label, no confidence figure attached
 ```
 
 ## Results
@@ -268,7 +268,7 @@ pytest -q --cov=. --cov-report=term-missing
 pytest -q --cov=. --cov-branch            # 100% of branches too, bar none
 ```
 
-138 tests, 100% of 528 statements. That figure is itself checked:
+138 tests, 100% of 525 statements. That figure is itself checked:
 `tests/test_published_figures.py` measures the repository and compares it
 with what this README and the published overview claim, because both had
 gone stale — the page described an 81-message corpus, two tied models with

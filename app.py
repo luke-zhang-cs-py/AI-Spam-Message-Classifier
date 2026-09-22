@@ -86,6 +86,49 @@ def retrain_with_embeddings():
     return current is not None and clf.wants_raw_text(current)
 
 
+def _ensure_model_locked(force_retrain=False):
+    """The actual work of `ensure_model`. Caller must already hold `_lock`.
+
+    Split out so a route that needs both the (model, vectorizer) pair *and*
+    a consistent read of `_state` -- `api_model`, `api_retrain` -- can do
+    both inside one `with _lock:` block instead of calling `ensure_model()`
+    (which releases the lock on return) and then reacquiring it to read
+    `_state`. That gap let a concurrent `/api/retrain` swap `_state` out
+    from under a request in the middle of it, so the name/metrics/
+    datasetSize in one response could come from two different trainings.
+    """
+    if _state["model"] is not None and not force_retrain:
+        return _state["model"], _state["vectorizer"]
+
+    model, vectorizer = (None, None) if force_retrain else clf.load_artifacts()
+
+    df = clf.load_data()
+    if model is None or vectorizer is None:
+        model, vectorizer = clf.train_and_evaluate(
+            df, embeddings=retrain_with_embeddings())
+        clf.save_model(model, vectorizer)
+
+    # Scored whether it was just trained or loaded from disk. This used to
+    # run only on the training path: the .joblib artifacts are gitignored,
+    # so the first run after a clone trained a model and showed its scores,
+    # and every restart afterwards loaded that model and showed nothing --
+    # a metric that disappears is worse than one that was never there. The
+    # page even had a line explaining it away as inherent ("a model loaded
+    # from disk carries no metrics with it"). It is not: evaluate() runs
+    # spamlib's out-of-fold cross-validation against this dataset, cloning
+    # and refitting the estimator per fold rather than scoring the
+    # already-fully-fit model on rows it was trained on. The one
+    # assumption is that the artifacts were trained on this dataset; swap
+    # dataset.csv without retraining and the reported numbers describe how
+    # this kind of model performs on the new data, not the loaded model
+    # itself, which is what the retrain button is for.
+    _state.update(model=model, vectorizer=vectorizer,
+                  name=model_display_name(model),
+                  metrics=evaluate(df, model, vectorizer),
+                  datasetSize=int(len(df)))
+    return model, vectorizer
+
+
 def ensure_model(force_retrain=False):
     """Load the saved artifacts, training them first if they are missing.
 
@@ -94,60 +137,31 @@ def ensure_model(force_retrain=False):
     cache, and both went off and trained a model.
     """
     with _lock:
-        if _state["model"] is not None and not force_retrain:
-            return _state["model"], _state["vectorizer"]
-
-        model, vectorizer = (None, None) if force_retrain else clf.load_artifacts()
-
-        df = clf.load_data()
-        if model is None or vectorizer is None:
-            model, vectorizer = clf.train_and_evaluate(
-                df, embeddings=retrain_with_embeddings())
-            clf.save_model(model, vectorizer)
-
-        # Scored whether it was just trained or loaded from disk. This used to
-        # run only on the training path: the .joblib artifacts are gitignored,
-        # so the first run after a clone trained a model and showed its scores,
-        # and every restart afterwards loaded that model and showed nothing --
-        # a metric that disappears is worse than one that was never there. The
-        # page even had a line explaining it away as inherent ("a model loaded
-        # from disk carries no metrics with it"). It is not: evaluate()
-        # re-scores against the same fixed split the trainer used. The one
-        # assumption is that the artifacts were trained on this dataset; swap
-        # dataset.csv without retraining and the split moves under them, which
-        # is what the retrain button is for.
-        _state.update(model=model, vectorizer=vectorizer,
-                      name=model_display_name(model),
-                      metrics=evaluate(df, model, vectorizer),
-                      datasetSize=int(len(df)))
-    return model, vectorizer
+        return _ensure_model_locked(force_retrain)
 
 
 def evaluate(df, model, vectorizer):
-    """Re-score on the same split the script uses, for display in the UI."""
-    from sklearn.model_selection import train_test_split
-    from sklearn.metrics import (accuracy_score, precision_score,
-                                 recall_score, f1_score, confusion_matrix)
+    """Genuine held-out metrics for display in the UI.
 
-    # Whichever column this backend reads. The embedding half wants the
-    # message as written; splitting on the normalised column and feeding
-    # that to the encoder would quietly cost most of what it was added for.
-    X = df["text"] if clf.wants_raw_text(vectorizer) else df["clean_text"]
-    y = df["label"].map({"ham": 0, "spam": 1})
-    # clf's constants, not a second copy of the numbers: the quarter this
-    # scores against is only held-out data if it is the same quarter the
-    # trainer held out.
-    _, X_test, _, y_test = train_test_split(
-        X, y, test_size=clf.TEST_SIZE, random_state=clf.RANDOM_STATE, stratify=y)
+    This used to carve its own train_test_split out of `df` and score the
+    model on that slice -- but train_and_evaluate() fits the final estimator
+    on the *entire* dataframe ("fit on everything", by its own docstring), so
+    every row in that "test" slice had already been trained on. The numbers
+    were in-sample and optimistic, not held-out.
 
-    preds = model.predict(vectorizer.transform(X_test.tolist()))
+    Delegates to spamlib.metrics() instead, which never scores a row with a
+    model that was fit on it: it clones the chosen estimator and runs it
+    through StratifiedKFold cross-validation, so each row is only ever
+    predicted by a fold that did not train on it.
+    """
+    scored = clf.metrics(df, model, vectorizer)
     return {
-        "accuracy": round(float(accuracy_score(y_test, preds)), 3),
-        "precision": round(float(precision_score(y_test, preds, zero_division=0)), 3),
-        "recall": round(float(recall_score(y_test, preds, zero_division=0)), 3),
-        "f1": round(float(f1_score(y_test, preds, zero_division=0)), 3),
-        "confusion": confusion_matrix(y_test, preds).tolist(),
-        "testSize": int(len(y_test)),
+        "accuracy": scored["accuracy"],
+        "precision": scored["precision"],
+        "recall": scored["recall"],
+        "f1": scored["f1"],
+        "confusion": scored["confusionMatrix"],
+        "testSize": int(len(df)),
     }
 
 
@@ -288,9 +302,16 @@ def api_model():
 
     datasetSize comes from the cached state rather than re-reading and
     re-parsing the CSV, which is what this did on every single request.
+
+    The ensure-then-read used to be two separate critical sections --
+    `ensure_model()` (lock released on return), then a fresh `with _lock:`
+    to read `_state`. A `/api/retrain` landing in the gap between them could
+    swap `_state` out from under this request, so the name/metrics/
+    datasetSize in one response were not guaranteed to all come from the
+    same training. One acquisition now covers both.
     """
-    ensure_model()
     with _lock:
+        _ensure_model_locked()
         return jsonify({"name": _state["name"], "metrics": _state["metrics"],
                         "datasetSize": _state["datasetSize"]})
 
@@ -358,8 +379,14 @@ def api_batch():
 
 @app.route("/api/retrain", methods=["POST"])
 def api_retrain():
-    model, _ = ensure_model(force_retrain=True)
+    """Retrain and report the result from one lock acquisition.
+
+    Same reasoning as `api_model`: a separate `ensure_model()` call followed
+    by its own `with _lock:` to read `_state` back left a window for another
+    request to interleave and change what got reported.
+    """
     with _lock:
+        _ensure_model_locked(force_retrain=True)
         return jsonify({"ok": True, "name": _state["name"],
                         "metrics": _state["metrics"]})
 
