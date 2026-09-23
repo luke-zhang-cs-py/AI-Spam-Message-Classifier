@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spam Classifier — browser build</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/static.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Spam Classifier<em>browser build — exported TF-IDF model</em></h1>
+    <div class="sub">Paste a message to see whether the model calls it spam &mdash; and
+      which words drove that call. Runs entirely on this machine; nothing is sent anywhere.</div>
+  </header>
+
+  <!-- Added by tools/build_static.py. The Flask app does not have this
+       paragraph because the Flask app does not need it: it has scikit-learn
+       behind it and can refit the model. This page cannot, and the two are
+       otherwise identical, so the difference has to be said out loud. -->
+  <div class="staticBanner">
+    <b>This is the browser-only build.</b> There is no Python running. The
+    fitted model &mdash; Multinomial Naive Bayes at a decision threshold of
+    0.4559, over a 4,479-term TF-IDF vocabulary &mdash; was exported to
+    <code>js/model-data.js</code>, and the scoring path from
+    <code>spamlib.py</code> was ported to <code>js/spam.js</code>: normalise,
+    vectorise, one sparse dot product, one comparison against the threshold.
+    <b>It does inference only</b>; training needs scikit-learn and the corpus,
+    so the Retrain button is disabled here. The port is not taken on trust:
+    <code>tools/build_static.py</code> runs both implementations over every
+    message in <code>data/</code> plus a list of deliberately awkward ones, and
+    refuses to publish this page if a single verdict, probability, cleaned
+    string or token weight disagrees.
+    <a href="https://github.com/luke-zhang-cs-py/AI-Spam-Message-Classifier">Source, and the Flask app this is a copy of &rarr;</a>
+  </div>
+
+  <div class="board">
+
+    <div class="main">
+      <div class="section">
+        <h2>Message</h2>
+        <textarea id="input" rows="5" placeholder="Paste a message&hellip;"></textarea>
+        <div class="btnrow">
+          <button id="classifyBtn">Classify</button>
+          <button class="secondary" id="batchBtn">Classify each line</button>
+          <button class="secondary" id="clearBtn">Clear</button>
+        </div>
+        <div class="err" id="err" style="display:none;"></div>
+        <div class="hint">Tip: paste several messages on separate lines and use
+          <b>Classify each line</b>.</div>
+      </div>
+
+      <div class="section" id="resultCard" style="display:none;">
+        <h2>Verdict</h2>
+        <div class="verdict">
+          <span class="badge" id="badge">&mdash;</span>
+          <div class="confwrap">
+            <div class="row"><span class="label">Confidence</span>
+              <span class="val" id="confVal">&mdash;</span></div>
+            <div class="bar"><div class="fill" id="confFill"></div></div>
+          </div>
+        </div>
+
+        <div class="stat"><span>Recognised words</span><b id="knownTokens">&mdash;</b></div>
+        <div class="stat"><span>After cleaning</span><b class="cleaned" id="cleaned">&mdash;</b></div>
+
+        <h2 style="margin-top:18px;">What drove it</h2>
+        <div class="tokens" id="tokens"></div>
+        <div class="legendrow">
+          <span><i class="sw spam"></i>pushes spam</span>
+          <span><i class="sw ham"></i>pushes ham</span>
+        </div>
+        <div class="note" id="tokenNote"></div>
+      </div>
+
+      <div class="section" id="batchCard" style="display:none;">
+        <h2>Batch results</h2>
+        <div class="stat"><span>Total</span><b id="bTotal">&mdash;</b></div>
+        <div class="stat"><span>Spam / Ham</span><b id="bSplit">&mdash;</b></div>
+        <table class="batch" id="batchTable"></table>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="section">
+        <h2>Model</h2>
+        <div class="stat"><span>Classifier</span><b id="mName">&mdash;</b></div>
+        <div class="stat"><span>Dataset</span><b id="mData">&mdash;</b></div>
+        <div class="stat"><span>Accuracy</span><b id="mAcc">&mdash;</b></div>
+        <div class="stat"><span>Precision</span><b id="mPrec">&mdash;</b></div>
+        <div class="stat"><span>Recall</span><b id="mRec">&mdash;</b></div>
+        <div class="stat"><span>F1</span><b id="mF1">&mdash;</b></div>
+        <button class="secondary" id="retrainBtn">Retrain</button>
+        <div class="note" id="mNote"></div>
+      </div>
+
+      <div class="section">
+        <h2>Try one</h2>
+        <ul class="samples" id="samples"></ul>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>Inference only: this page carries the numbers a training run produced and multiplies
+    them out. Trained on the CSV corpus in <code>data/</code> (see Dataset above for its
+    current size) &mdash; there is no embedded sample set any more. The scores above
+    come from 5-fold cross-validation, not a single train/test split: every message is
+    scored only by a fold that did not train on it, so they reflect genuine held-out
+    performance on the current corpus rather than a fixed-size test slice.</footer>
+
+</div>
+<!-- Order matters. model-data.js is read by spam.js as it defines
+     itself; static-api.js installs the fetch shim before app.js
+     runs and immediately calls it; static-ui.js corrects a control
+     app.js binds and goes last. app.js itself is the Flask app's
+     file, copied byte for byte -- see tools/build_static.py. -->
+<script src="js/model-data.js"></script>
+<script src="js/spam.js"></script>
+<script src="js/static-api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/static-ui.js"></script>
+</body>
+</html>

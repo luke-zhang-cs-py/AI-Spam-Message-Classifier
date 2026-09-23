@@ -36,6 +36,31 @@ python -m flake8 . --select=E9,F63,F7,F82
 52 tests. The model is trained once per session rather than per test, so the
 suite runs in seconds instead of minutes.
 
+## If you change the page, the pipeline, or the model
+
+`docs/app/` is generated, not written. It is the Flask page with the fitted
+model exported into it, and `templates/index.html`, `static/css/style.css`
+and `static/js/app.js` are copied into it byte for byte — so editing anything
+in `docs/app/` is editing a file that the next build overwrites.
+
+```bash
+python tools/build_static.py           # rebuild it
+python tools/build_static.py --prove   # and check the checks can still fail
+```
+
+Rebuild after any change to the template, the stylesheet, `app.js`,
+`clean_text`, the vectoriser configuration, `token_weights`, the endpoints, or
+the trained artifacts. The build refuses to write anything if its JavaScript
+and the Python disagree about a single verdict, probability, cleaned string or
+token weight, so a change it cannot follow shows up as a failed build rather
+than as a published page that quietly says something different from the
+repository. That check needs a browser (`pip install playwright && python -m
+playwright install chromium`); `pytest` does not.
+
+`tools/*` is omitted from coverage, so none of this moves the published
+figures. If you change a root module, run `python tools/refresh_figures.py`
+instead of editing numbers into `docs/index.html` by hand.
+
 ## Conventions
 
 Every test that names a bug describes one that was really in this

@@ -1,0 +1,24 @@
+/* ---------------------------------------------------------------------------
+   static.css — the only thing the browser-only build adds to the look
+   ---------------------------------------------------------------------------
+   Loaded after style.css, and it adds rather than overrides: the two builds
+   should look like the same program, because they are the same program. The
+   markup, the stylesheet and app.js are copied byte for byte out of the Flask
+   app by tools/build_static.py.
+
+   The banner is not decoration. This page and the Flask app are pixel for
+   pixel the same, and the difference between them -- one loads a fitted
+   scikit-learn model and can refit it, the other carries the numbers that
+   model ended up with and can only multiply them out -- is invisible unless
+   it is written down.
+   --------------------------------------------------------------------------- */
+
+  .staticBanner{margin:0 0 20px;padding:12px 15px 13px;border-radius:10px;
+    background:var(--panel);border:1px solid var(--hair);
+    border-left:3px solid var(--accent);
+    color:var(--muted);font-size:12px;line-height:1.7;max-width:820px;}
+  .staticBanner b{color:var(--ink);font-weight:600;}
+  .staticBanner code{font-family:'IBM Plex Mono',monospace;font-size:11px;
+    color:var(--ink);background:#0b0f15;border-radius:4px;padding:1px 5px;}
+  .staticBanner a{color:var(--accent);text-decoration:none;}
+  .staticBanner a:hover{text-decoration:underline;}
