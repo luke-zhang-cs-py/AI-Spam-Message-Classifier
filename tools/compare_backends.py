@@ -33,8 +33,8 @@ from sklearn.naive_bayes import ComplementNB, MultinomialNB
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-import embeddings as backend          # noqa: E402
-import spamlib                        # noqa: E402
+from pipeline import embeddings as backend          # noqa: E402
+from pipeline import spamlib                        # noqa: E402
 
 # Only for the "embeddings alone" row. Nothing spamlib builds is purely
 # dense, so this is the one estimator in the file that the library itself

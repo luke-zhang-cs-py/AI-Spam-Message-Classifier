@@ -58,7 +58,10 @@ import os
 import numpy as np
 from scipy.sparse import csr_matrix, hstack
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
+# The project root, not this package: the encoder is downloaded into
+# models/ beside the code. One dirname would look in pipeline/models
+# and report the encoder as missing on a machine that has it.
+_HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # all-MiniLM-L6-v2: 6 layers, 384 dimensions, ~87 MB. Chosen for being the
 # smallest sentence encoder that is not obviously worse than the big ones on

@@ -31,10 +31,10 @@ a rename as well.
 import argparse
 import sys
 
-import spamlib
+from pipeline import spamlib
 # Re-exported for the callers that already import them from here. Spelled
 # out rather than star-imported so what this module promises is readable.
-from spamlib import (EMBEDDING_C, MAX_ITER, MIN_DF, MODEL_PATH, NGRAM_RANGE,
+from pipeline.spamlib import (EMBEDDING_C, MAX_ITER, MIN_DF, MODEL_PATH, NGRAM_RANGE,
                      PRECISION_FLOOR, RANDOM_STATE, STOP_WORDS, TEST_SIZE,
                      VECTORIZER_PATH, Thresholded, build_vectorizer,
                      clean_text, compare_models, describe_features,

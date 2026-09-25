@@ -31,9 +31,9 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-import embeddings                          # noqa: E402
-import spamlib                             # noqa: E402
-import train_spam_classifier as trainer    # noqa: E402
+from pipeline import embeddings                          # noqa: E402
+from pipeline import spamlib                             # noqa: E402
+from cli import train_spam_classifier as trainer    # noqa: E402
 
 FAKE_WIDTH = 8
 
@@ -102,7 +102,7 @@ def test_importing_the_backend_does_not_import_torch():
     """
     done = subprocess.run(
         [sys.executable, "-c",
-         "import embeddings, spamlib, sys;"
+         "from pipeline import embeddings, spamlib; import sys;"
          "print('torch' in sys.modules, "
          "'sentence_transformers' in sys.modules)"],
         cwd=ROOT, capture_output=True, text=True, timeout=300)
@@ -208,7 +208,13 @@ def test_the_backend_problem_survives_a_spamlib_lifted_on_its_own(monkeypatch):
     """`spam_classifier_all_in_one.py` is named for this project's habit of
     copying files out to stand alone. A spamlib without its sibling should
     say so rather than fail on a bare import line."""
-    monkeypatch.setitem(sys.modules, "embeddings", None)
+    # Two steps, not one. The module is a submodule of a package now, so
+    # `from pipeline import embeddings` finds the attribute already set on
+    # the package and never consults sys.modules -- blanking only the
+    # sys.modules entry made this test pass for the wrong reason.
+    import pipeline
+    monkeypatch.delattr(pipeline, "embeddings", raising=False)
+    monkeypatch.setitem(sys.modules, "pipeline.embeddings", None)
     problem = spamlib.embedding_backend_problem()
     assert "not importable" in problem
 
@@ -614,12 +620,17 @@ def test_the_app_scores_a_raw_text_backend_on_raw_text(encoder, corpus):
 # --------------------------------------------------------------- the CLIs
 
 def test_both_clis_offer_the_flag():
-    for script in ("spam_classifier_all_in_one.py", "train_spam_classifier.py"):
-        done = subprocess.run([sys.executable, os.path.join(ROOT, script),
-                               "--help"],
-                              capture_output=True, text=True, timeout=300)
+    # One is still a file at the root, because it exists to be copied out
+    # and run on its own; the other moved into cli/ and is a module now.
+    for name, argv in (("spam_classifier_all_in_one.py",
+                        [os.path.join(ROOT, "spam_classifier_all_in_one.py")]),
+                       ("cli.train_spam_classifier",
+                        ["-m", "cli.train_spam_classifier"])):
+        done = subprocess.run([sys.executable] + argv + ["--help"],
+                              capture_output=True, text=True, timeout=300,
+                              cwd=ROOT)
         assert done.returncode == 0, done.stderr[-400:]
-        assert "--embeddings" in done.stdout, script
+        assert "--embeddings" in done.stdout, name
 
 
 def test_the_flag_prints_the_fix_rather_than_a_traceback(monkeypatch, capsys):

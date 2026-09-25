@@ -266,7 +266,7 @@ ADVERSARIAL = [
 
 def corpus():
     """Every message the two sides are compared on."""
-    import spamlib
+    from pipeline import spamlib
 
     frame = spamlib.load_data()
     return list(frame["text"].astype(str)) + ADVERSARIAL
@@ -329,7 +329,7 @@ def load_model():
     rebuilt on a machine that had already run the app. Training is the same
     deterministic, seeded call app.py makes, and it takes about a second.
     """
-    import spamlib
+    from pipeline import spamlib
 
     model, vectorizer = spamlib.load_artifacts()
     if model is None or vectorizer is None:
@@ -352,14 +352,14 @@ def collect_model(model, vectorizer):
     """
     import numpy as np
     import app as flask_app
-    import spamlib
+    from pipeline import spamlib
 
     if spamlib.wants_raw_text(vectorizer):
         stop("this model was trained with the optional embedding backend, "
              "which is a 22 MB sentence-transformer and 384 dense features "
              "per message. That is not something to inline in a page.\n"
              "  Retrain without --embeddings, or publish the tf-idf model:\n"
-             "  python train_spam_classifier.py")
+             "  python -m cli.train_spam_classifier")
 
     from sklearn.feature_extraction.text import TfidfVectorizer
     if not isinstance(vectorizer, TfidfVectorizer):
@@ -457,7 +457,7 @@ def collect_model(model, vectorizer):
 def model_metrics(model, vectorizer):
     """The figures /api/model serves, measured the way app.py measures them."""
     import app as flask_app
-    import spamlib
+    from pipeline import spamlib
 
     frame = spamlib.load_data()
     return flask_app.evaluate(frame, model, vectorizer), int(len(frame))
@@ -659,7 +659,7 @@ def python_reference(messages, model, vectorizer):
     times would be most of the wall clock and none of the information.
     """
     import app as flask_app
-    import spamlib
+    from pipeline import spamlib
 
     payloads = [flask_app.classify(m, model, vectorizer) for m in messages]
 

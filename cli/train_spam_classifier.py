@@ -3,10 +3,10 @@ train_spam_classifier.py
 -------------------------
 Train the filter from the corpus and save the artifacts.
 
-    python train_spam_classifier.py
-    python train_spam_classifier.py --data data/            # a shard directory
-    python train_spam_classifier.py --data dataset.csv      # one file
-    python train_spam_classifier.py --embeddings            # + transformer
+    python -m cli.train_spam_classifier
+    python -m cli.train_spam_classifier --data data/            # a shard directory
+    python -m cli.train_spam_classifier --data dataset.csv      # one file
+    python -m cli.train_spam_classifier --embeddings            # + transformer
 
 This used to carry its own copy of the pipeline: `clean_text`, `load_data`,
 `train_and_evaluate`, `save_model`, `load_artifacts` and `predict_message`
@@ -21,8 +21,8 @@ MODEL_PATH, VECTORIZER_PATH and predict_message from this module.
 import argparse
 import sys
 
-import spamlib
-from spamlib import (DATA_DIR, EMBEDDING_C, LEGACY_DATA_PATH, MAX_ITER, MIN_DF,
+from pipeline import spamlib
+from pipeline.spamlib import (DATA_DIR, EMBEDDING_C, LEGACY_DATA_PATH, MAX_ITER, MIN_DF,
                      MODEL_PATH, NGRAM_RANGE, PRECISION_FLOOR, RANDOM_STATE,
                      STOP_WORDS, TEST_SIZE, VECTORIZER_PATH, Thresholded,
                      build_vectorizer, clean_text, compare_models,

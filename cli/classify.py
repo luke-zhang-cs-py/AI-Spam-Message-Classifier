@@ -5,15 +5,15 @@ Loads the model + vectorizer saved by train_spam_classifier.py and
 classifies message(s) you provide.
 
 Usage:
-    python classify.py "Congratulations, you've won a free prize!"
-    python classify.py   # no argument -> interactive mode, type messages, Ctrl+C to quit
+    python -m cli.classify "Congratulations, you've won a free prize!"
+    python -m cli.classify   # no argument -> interactive, Ctrl+C to quit
 """
 
 import sys
 
 import joblib
 
-from train_spam_classifier import MODEL_PATH, VECTORIZER_PATH, predict_message
+from cli.train_spam_classifier import MODEL_PATH, VECTORIZER_PATH, predict_message
 
 
 def load_artifacts():
@@ -95,7 +95,8 @@ def main(argv=None, read=None):
 
     model, vectorizer = load_artifacts()
     if model is None:
-        print("Model not found. Run `python train_spam_classifier.py` first.")
+        print("Model not found. Run `python -m cli.train_spam_classifier` "
+              "first.")
         return 1
 
     if arguments:

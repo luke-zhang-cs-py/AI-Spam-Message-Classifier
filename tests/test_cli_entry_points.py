@@ -31,10 +31,10 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-import classify as cli                          # noqa: E402
+from cli import classify as classify_cli                 # noqa: E402
 import spam_classifier_all_in_one as allinone   # noqa: E402
-import spamlib                                  # noqa: E402
-import train_spam_classifier as trainer         # noqa: E402
+from pipeline import spamlib                                  # noqa: E402
+from cli import train_spam_classifier as trainer         # noqa: E402
 
 
 @pytest.fixture
@@ -48,7 +48,7 @@ def artifacts(tmp_path, monkeypatch):
     """
     model = str(tmp_path / "m.joblib")
     vector = str(tmp_path / "v.joblib")
-    for module in (spamlib, allinone, trainer, cli):
+    for module in (spamlib, allinone, trainer, classify_cli):
         monkeypatch.setattr(module, "MODEL_PATH", model, raising=False)
         monkeypatch.setattr(module, "VECTORIZER_PATH", vector, raising=False)
     return model, vector
@@ -80,7 +80,7 @@ def test_the_classify_cli_labels_a_message_from_its_arguments(artifacts):
     """The argv path. Covered by a subprocess test as well, which proves it
     works from a shell; this one is what measures it."""
     trainer.main(["--quiet"])
-    assert cli.main(["WINNER! Claim your FREE prize now"]) == 0
+    assert classify_cli.main(["WINNER! Claim your FREE prize now"]) == 0
 
 
 def test_the_classify_cli_joins_its_arguments(artifacts, capsys):
@@ -97,13 +97,13 @@ def test_the_classify_cli_joins_its_arguments(artifacts, capsys):
     trainer.main(["--quiet"])
     words = ["You", "have", "won", "a", "free", "cruise", "click", "here"]
 
-    model, vectorizer = cli.load_artifacts()
-    assert cli.classify(words[0], model, vectorizer).upper().startswith("HAM"), (
+    model, vectorizer = classify_cli.load_artifacts()
+    assert classify_cli.classify(words[0], model, vectorizer).upper().startswith("HAM"), (
         "the control failed: the first word alone is already spam, so this "
         "test could pass without joining anything")
 
     capsys.readouterr()
-    assert cli.main(words) == 0
+    assert classify_cli.main(words) == 0
     assert capsys.readouterr().out.strip().upper().startswith("SPAM")
 
 
@@ -116,7 +116,7 @@ def test_the_classify_prompt_classifies_each_line(artifacts, capsys):
     typed = Typed("WINNER! Claim your FREE prize now",
                   "   ",                        # whitespace: skipped, no crash
                   "are we still on for dinner")
-    assert cli.main([], read=typed) == 0
+    assert classify_cli.main([], read=typed) == 0
 
     printed = capsys.readouterr().out
     assert typed.prompts == ["> "] * 4, "the prompt stopped being shown"
@@ -129,18 +129,18 @@ def test_the_classify_prompt_ends_on_ctrl_c_as_well_as_eof(artifacts, capsys):
     """Both endings, because the loop catches both and a test of one leaves
     the other branch of the same `except` untested."""
     trainer.main(["--quiet"])
-    model, vectorizer = cli.load_artifacts()
+    model, vectorizer = classify_cli.load_artifacts()
     for ending in (EOFError, KeyboardInterrupt):
         capsys.readouterr()
-        cli.run_interactive(model, vectorizer, read=Typed(ending=ending))
+        classify_cli.run_interactive(model, vectorizer, read=Typed(ending=ending))
         assert "Bye!" in capsys.readouterr().out, ending
 
 
 def test_the_classify_cli_reports_a_missing_model_with_a_nonzero_status(
         artifacts, capsys):
     """The state of every fresh clone: the .joblib files are gitignored."""
-    assert cli.main(["anything"]) == 1
-    assert "train_spam_classifier.py" in capsys.readouterr().out, (
+    assert classify_cli.main(["anything"]) == 1
+    assert "cli.train_spam_classifier" in capsys.readouterr().out, (
         "the message does not say what to run")
 
 
@@ -323,6 +323,6 @@ def test_the_source_of_both_mains_is_reachable_without_a_subprocess():
     import inspect
     assert "argv" in inspect.signature(allinone.main).parameters
     assert "argv" in inspect.signature(trainer.main).parameters
-    assert "argv" in inspect.signature(cli.main).parameters
-    for function in (cli.run_interactive, allinone.run_interactive):
+    assert "argv" in inspect.signature(classify_cli.main).parameters
+    for function in (classify_cli.run_interactive, allinone.run_interactive):
         assert "read" in inspect.signature(function).parameters, function

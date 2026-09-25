@@ -379,12 +379,14 @@ footer a { color: inherit; }
  * `python tools/refresh_figures.py` rewrites them. */
 
 var MODULES = [
-  { name: 'spamlib.py',                    lines: 568, stmts: 195, missed:  0, does: 'the one implementation: normalising, model choice, the tuned threshold' },
+  { name: 'pipeline/spamlib.py',           lines: 572, stmts: 195, missed:  0, does: 'the one implementation: normalising, model choice, the tuned threshold' },
   { name: 'app.py',                        lines: 399, stmts: 118, missed:  0, does: 'the web UI, five endpoints, and the per-word explanation' },
-  { name: 'embeddings.py',                 lines: 279, stmts:  80, missed:  0, does: 'the optional transformer backend, off by default and measured' },
+  { name: 'pipeline/embeddings.py',        lines: 282, stmts:  80, missed:  0, does: 'the optional transformer backend, off by default and measured' },
   { name: 'spam_classifier_all_in_one.py', lines: 197, stmts:  64, missed:  0, does: 'the end-to-end demo and CLI; the pipeline itself moved to spamlib' },
-  { name: 'classify.py',                   lines: 110, stmts:  34, missed:  0, does: 'one message from the command line, or an interactive loop' },
-  { name: 'train_spam_classifier.py',      lines: 111, stmts:  34, missed:  0, does: 'trains both models, compares them, saves the winner' }
+  { name: 'cli/classify.py',               lines: 111, stmts:  34, missed:  0, does: 'one message from the command line, or an interactive loop' },
+  { name: 'cli/train_spam_classifier.py',  lines: 111, stmts:  34, missed:  0, does: 'trains both models, compares them, saves the winner' },
+  { name: 'cli/__init__.py',               lines:   7, stmts:   0, missed:  0, does: 'the package: train it, then ask it about a message' },
+  { name: 'pipeline/__init__.py',          lines:   6, stmts:   0, missed:  0, does: 'the package: the filter, and its one optional backend' }
 ];
 
 var TESTS = [
@@ -396,7 +398,7 @@ var TESTS = [
   { file: 'test_published_figures.py',   n: 11, of: 'the numbers on this page, against a fresh measurement' }
 ];
 
-var TEST_LINES = 2405;
+var TEST_LINES = 2417;
 
 /* Which interpreter produced the statement counts above. It matters: coverage
  * counts a `with` block or a multi-line call differently between versions, so

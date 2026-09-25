@@ -74,7 +74,11 @@ from sklearn.metrics import (accuracy_score, classification_report,
 from sklearn.model_selection import StratifiedKFold, cross_val_predict
 from sklearn.naive_bayes import ComplementNB, MultinomialNB
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
+# The project root, not this package: the corpus, the legacy CSV and the
+# two saved artifacts all live beside the code rather than inside it.
+# One dirname would put every one of them in pipeline/, and the failure
+# is a corpus that is simply not found.
+_HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 DATA_DIR = os.path.join(_HERE, "data")
 LEGACY_DATA_PATH = os.path.join(_HERE, "dataset.csv")
@@ -298,7 +302,7 @@ def build_vectorizer(embeddings=False, model_dir=None):
     if not embeddings:
         return tfidf
 
-    import embeddings as backend
+    from pipeline import embeddings as backend
     return backend.SemanticFeatures(lexical=tfidf, cleaner=clean_text,
                                     model_dir=model_dir)
 
@@ -358,7 +362,7 @@ def embedding_backend_problem(model_dir=None):
     say so rather than fail on a bare import line.
     """
     try:
-        import embeddings as backend
+        from pipeline import embeddings as backend
     except ImportError as problem:
         return "the embeddings module is not importable: %s" % problem
     return backend.missing_requirement(model_dir)

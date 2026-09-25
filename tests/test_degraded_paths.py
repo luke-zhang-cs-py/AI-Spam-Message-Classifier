@@ -35,8 +35,8 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-import embeddings                          # noqa: E402
-import spamlib                             # noqa: E402
+from pipeline import embeddings                          # noqa: E402
+from pipeline import spamlib                             # noqa: E402
 
 # Two words per message and none of them one character long: the default
 # `token_pattern` wants at least two, so a fixture of ["a b", "c d"] gives

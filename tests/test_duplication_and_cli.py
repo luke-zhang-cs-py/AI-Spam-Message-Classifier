@@ -26,9 +26,9 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-import classify as cli                          # noqa: E402
+from cli import classify as classify_cli                 # noqa: E402
 import spam_classifier_all_in_one as allinone   # noqa: E402
-import train_spam_classifier as trainer         # noqa: E402
+from cli import train_spam_classifier as trainer         # noqa: E402
 
 MESSAGES = [
     "WINNER!! Claim your FREE prize now, call 09061701461",
@@ -137,7 +137,7 @@ def test_both_facades_re_export_the_same_pipeline_names():
     the trainer does not (its demo and prompt runners), so the claim is
     about the shared pipeline rather than equality of the two lists.
     """
-    import spamlib
+    from pipeline import spamlib
 
     only_allinone = {"run_training_and_demo", "run_interactive"}
     shared = set(allinone.__all__) - only_allinone - {"main"}
@@ -168,7 +168,7 @@ def test_the_trainer_states_no_recipe_of_its_own():
     -- which is the failure the comment in allinone described in the past
     tense while this half of it was still live.
     """
-    source = open(os.path.join(ROOT, "train_spam_classifier.py"),
+    source = open(os.path.join(ROOT, "cli", "train_spam_classifier.py"),
                   encoding="utf-8").read()
     code = re.sub(r'"""(?:.|\n)*?"""', "", source)
     code = re.sub(r"#[^\n]*", "", code)
@@ -180,23 +180,23 @@ def test_the_trainer_states_no_recipe_of_its_own():
 # ----------------------------------------------------------------- classify
 
 def test_classify_loads_the_saved_artifacts():
-    model, vectorizer = cli.load_artifacts()
+    model, vectorizer = classify_cli.load_artifacts()
     assert model is not None and vectorizer is not None
 
 
 def test_classify_labels_a_message():
-    model, vectorizer = cli.load_artifacts()
-    verdict = cli.classify("WINNER! Claim your FREE prize now", model, vectorizer)
+    model, vectorizer = classify_cli.load_artifacts()
+    verdict = classify_cli.classify("WINNER! Claim your FREE prize now", model, vectorizer)
     assert verdict.upper().startswith("SPAM"), verdict
 
 
 def test_the_cli_renders_the_shared_verdict_rather_than_its_own():
     """It used to reimplement predict_message and return a differently
     formatted answer. Same decision, three entry points, three spellings."""
-    model, vectorizer = cli.load_artifacts()
+    model, vectorizer = classify_cli.load_artifacts()
     message = "WINNER! Claim your FREE prize now"
     shared = allinone.predict_message(message, model, vectorizer)
-    assert cli.classify(message, model, vectorizer).lower() == shared.lower()
+    assert classify_cli.classify(message, model, vectorizer).lower() == shared.lower()
 
 
 def test_both_load_artifacts_have_the_same_contract(monkeypatch, tmp_path):
@@ -208,7 +208,7 @@ def test_both_load_artifacts_have_the_same_contract(monkeypatch, tmp_path):
     source now contains the words "sys.exit" in a comment explaining this.
     """
     missing = str(tmp_path / "nope.joblib")
-    for module in (cli, allinone):
+    for module in (classify_cli, allinone):
         monkeypatch.setattr(module, "MODEL_PATH", missing)
         monkeypatch.setattr(module, "VECTORIZER_PATH", missing)
         assert module.load_artifacts() == (None, None), module.__name__
@@ -217,8 +217,8 @@ def test_both_load_artifacts_have_the_same_contract(monkeypatch, tmp_path):
 def test_classify_reports_missing_artifacts_rather_than_raising(monkeypatch):
     """Running it before training is the obvious first mistake, and it should
     say so rather than throw a traceback about a missing file."""
-    monkeypatch.setattr(cli, "MODEL_PATH", os.path.join(ROOT, "not-a-model.joblib"))
-    model, vectorizer = cli.load_artifacts()
+    monkeypatch.setattr(classify_cli, "MODEL_PATH", os.path.join(ROOT, "not-a-model.joblib"))
+    model, vectorizer = classify_cli.load_artifacts()
     assert model is None and vectorizer is None
 
 
@@ -287,7 +287,8 @@ def test_the_embedded_dataset_matches_the_csv_columns():
 
 def test_running_the_module_by_name_does_not_train_on_import():
     """Importing must not have side effects; the training is behind main()."""
-    module = runpy.run_path(os.path.join(ROOT, "classify.py"), run_name="not_main")
+    module = runpy.run_path(os.path.join(ROOT, "cli", "classify.py"),
+                            run_name="not_main")
     assert "main" in module
 
 
@@ -335,7 +336,7 @@ def test_the_classify_cli_labels_a_message_from_argv():
     """classify.main() was at 45% -- the whole command-line half of a
     command-line tool."""
     result = subprocess.run(
-        [sys.executable, os.path.join(ROOT, "classify.py"),
+        [sys.executable, "-m", "cli.classify",
          "WINNER! Claim your FREE prize now, call 09061701461"],
         capture_output=True, text=True, cwd=ROOT)
     assert result.returncode == 0, result.stderr[-400:]
@@ -346,7 +347,7 @@ def test_the_classify_cli_says_what_to_do_when_there_is_no_model(tmp_path,
                                                                  monkeypatch):
     """Rather than a traceback about a missing file. The artifacts are
     gitignored, so this is the state of every fresh clone."""
-    monkeypatch.setattr(cli, "MODEL_PATH", str(tmp_path / "absent.joblib"))
-    monkeypatch.setattr(cli, "VECTORIZER_PATH", str(tmp_path / "absent2.joblib"))
+    monkeypatch.setattr(classify_cli, "MODEL_PATH", str(tmp_path / "absent.joblib"))
+    monkeypatch.setattr(classify_cli, "VECTORIZER_PATH", str(tmp_path / "absent2.joblib"))
     monkeypatch.setattr(sys, "argv", ["classify.py"])
-    assert cli.main() == 1
+    assert classify_cli.main() == 1

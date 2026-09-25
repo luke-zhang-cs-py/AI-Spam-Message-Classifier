@@ -50,14 +50,31 @@ message -> clean_text() -> TF-IDF (1-2 grams) -> classifier -> threshold -> spam
 pip install -r requirements.txt
 
 python app.py                                                  # web UI, port 5002
-python train_spam_classifier.py                                # train + evaluate
-python classify.py "Congratulations! You've won a free prize"  # one message
+python -m cli.train_spam_classifier                            # train + evaluate
+python -m cli.classify "Congratulations! You've won a free prize"  # one message
 ```
 
-`spamlib.py` is the one implementation; the CLI scripts and the Flask app are
+`pipeline/spamlib.py` is the one implementation; the CLI and the Flask app are
 entry points to it. They used to be three copies with a test asserting the
 copies agreed — which kept them in step without ever reducing how many there
 were.
+
+```
+pipeline/   spamlib.py       the filter: cleaning, features, training,
+            embeddings.py    prediction, and the optional transformer
+cli/        classify.py      train it, then ask it about a message
+            train_spam_classifier.py
+app.py      the web UI
+spam_classifier_all_in_one.py
+            the copy-out-and-run demo, which app.py imports
+data/       the corpus, one CSV per theme
+dataset.csv the older single file, read only when data/ is absent
+```
+
+The two files still at the root are there on purpose. The all-in-one exists
+to be one file somebody can lift, and burying it would defeat that;
+`dataset.csv` is the fallback for a checkout without `data/`, so moving it
+into `data/` would make it unreachable by definition.
 
 ## Results
 
