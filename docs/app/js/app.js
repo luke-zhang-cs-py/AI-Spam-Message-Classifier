@@ -120,10 +120,12 @@ function renderModel(d) {
   $('mF1').textContent = m ? m.f1 : '—';
   // Every model reports scores now, loaded or freshly trained. This used to
   // read "scores appear after a retrain", which explained a bug rather than
-  // describing a limitation: the evaluation runs against a fixed split, so a
-  // model off the disk can be scored exactly as well as a new one.
+  // describing a limitation: the evaluation is seeded cross-validation, so a
+  // model off the disk can be scored exactly as well as a new one. It then
+  // said "a held-out split of N messages" for scores that are out of fold
+  // over all N -- the footer said one thing and this said another.
   $('mNote').textContent = m
-    ? `Scored on a held-out split of ${m.testSize} messages.`
+    ? `Scored out of fold: each of the ${m.testSize} messages by a model that never trained on it.`
     : 'No scores available.';
 }
 

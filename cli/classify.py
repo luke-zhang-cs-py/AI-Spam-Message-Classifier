@@ -11,46 +11,39 @@ Usage:
 
 import sys
 
-import joblib
-
+from pipeline import spamlib
 from cli.train_spam_classifier import MODEL_PATH, VECTORIZER_PATH, predict_message
 
 
 def load_artifacts():
-    """Returns (model, vectorizer), or (None, None) if they are not on disk.
+    """Returns (model, vectorizer), or (None, None) if they cannot be loaded.
 
     It used to print and call sys.exit(1) from in here. A function whose job
     is to load two files should not be able to end the process -- it made
     this untestable, and it meant that importing `load_artifacts` from this
     module rather than from spam_classifier_all_in_one silently handed you a
-    function with the power to terminate your program. Two functions with
-    one name and opposite contracts is the trap. Deciding what to do about a
-    missing model is main()'s job, below.
+    function with the power to terminate your program. Deciding what to do
+    about a missing model is main()'s job, below.
+
+    It then kept its own `joblib.load` pair, catching FileNotFoundError and
+    nothing else, beside the shared loader that catches every failure -- so
+    an artifact written by another scikit-learn, or truncated by an
+    interrupted save, was "Model not found" to the trainer and a traceback
+    here. It defers to the shared loader now, with this module's paths
+    (which the tests monkeypatch).
     """
-    try:
-        return joblib.load(MODEL_PATH), joblib.load(VECTORIZER_PATH)
-    except FileNotFoundError:
-        return None, None
+    return spamlib.load_artifacts(MODEL_PATH, VECTORIZER_PATH)
 
 
 def classify(message: str, model, vectorizer) -> str:
-    """The command line's rendering of the shared verdict.
+    """The command line's rendering of the shared verdict: "SPAM" or "HAM".
 
     This used to reimplement predict_message -- same transform, same
-    predict, same probability lookup -- and returned "SPAM (69.1%
-    confidence)" of its own invention while the shared version returned a
-    differently formatted string. One decision, three entry points, three
-    spellings of the answer.
-
-    The logic is imported now, so this file only supplies the
-    capitalisation. `predict_message` itself no longer reports a confidence
-    figure at all -- it returns a bare "spam" or "ham" -- so `verdict` has no
-    text after the label, `rest` is always empty, and the actual output here
-    is just "SPAM" or "HAM".
+    predict, same probability lookup -- with a "SPAM (69.1% confidence)"
+    format of its own invention. The decision is imported now, so this file
+    only supplies the capitals.
     """
-    verdict = predict_message(message, model, vectorizer)
-    label, _, rest = verdict.partition(" ")
-    return f"{label.upper()} {rest}".strip()
+    return predict_message(message, model, vectorizer).upper()
 
 
 def run_interactive(model, vectorizer, read=None):

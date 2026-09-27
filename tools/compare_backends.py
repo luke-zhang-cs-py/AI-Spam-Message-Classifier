@@ -10,8 +10,9 @@ whole argument for keeping the backend is that the gap should move as the
 data does, and that is a claim with an expiry date on it.
 
 Everything is scored the way `spamlib` scores: one 5-fold stratified split
-shared by every row of the table, probabilities from `cross_val_predict` so
-no message is judged by a fold that trained on it, and the threshold chosen
+shared by every row of the table, the features and the estimator refitted
+inside each fold so no message is judged by a fold that learned anything
+from it -- vocabulary and idf included -- and the threshold chosen
 to maximise F1 subject to precision >= PRECISION_FLOOR. Comparing a tuned
 model against an untuned one at 0.5 is how a backend gets adopted on the
 strength of its threshold.
@@ -43,24 +44,25 @@ from pipeline import spamlib                        # noqa: E402
 from sklearn.svm import SVC           # noqa: E402
 
 
-def scored(estimator, X, y):
+def scored(estimator, folds, y):
     """(threshold, precision, recall, f1), out of fold, at the floor."""
-    scores = spamlib._out_of_fold_scores(estimator, X, y)
+    scores = spamlib._out_of_fold_scores(estimator, folds, y)
     return spamlib.choose_threshold(scores, y)
 
 
-def features(df, lexical, semantic):
-    """A feature matrix with either half, or both."""
+def features(df, y, lexical, semantic):
+    """Per-fold features with either half, or both, the extractor refitted
+    on every training fold exactly as `spamlib.compare_models` does."""
     tfidf = spamlib.build_vectorizer() if lexical else None
     if not semantic:
-        return tfidf.fit_transform(df["clean_text"])
+        return spamlib.fold_features(tfidf, df, y)
     combined = backend.SemanticFeatures(lexical=tfidf,
                                         cleaner=spamlib.clean_text)
-    return combined.fit_transform(df["text"].tolist())
+    return spamlib.fold_features(combined, df, y)
 
 
-def row(label, name, estimator, X, y):
-    cut, precision, recall, f1 = scored(estimator, X, y)
+def row(label, name, estimator, folds, y):
+    cut, precision, recall, f1 = scored(estimator, folds, y)
     print("  %-20s %-30s %9.4f %10.3f %8.3f %8.3f"
           % (label, name, cut, precision, recall, f1))
     return f1, precision, recall, label, name
@@ -73,13 +75,13 @@ def compare(df, y):
     print("  " + "-" * 90)
 
     rows = []
-    lexical = features(df, lexical=True, semantic=False)
+    lexical = features(df, y, lexical=True, semantic=False)
     rows.append(row("tf-idf", "MultinomialNB", MultinomialNB(), lexical, y))
     rows.append(row("tf-idf", "ComplementNB", ComplementNB(), lexical, y))
     rows.append(row("tf-idf", "LogReg",
                     LogisticRegression(max_iter=spamlib.MAX_ITER), lexical, y))
 
-    dense = features(df, lexical=False, semantic=True)
+    dense = features(df, y, lexical=False, semantic=True)
     C = spamlib.EMBEDDING_C
     rows.append(row("embeddings", "LogReg",
                     LogisticRegression(max_iter=spamlib.MAX_ITER, C=C),
@@ -88,7 +90,7 @@ def compare(df, y):
                     SVC(kernel="rbf", C=C, probability=True,
                         random_state=spamlib.RANDOM_STATE), dense, y))
 
-    both = features(df, lexical=True, semantic=True)
+    both = features(df, y, lexical=True, semantic=True)
     for name, estimator in spamlib.candidate_models(embeddings=True).items():
         rows.append(row("tf-idf + embeddings", name, estimator, both, y))
 
@@ -105,15 +107,18 @@ def compare(df, y):
              incumbent[2]))
     print("difference: %+.4f F1" % (best[0] - incumbent[0]))
     print()
-    print("The backend is off by default while that difference is this small.")
-    print("It is about three thousandths of F1 on %d messages, which is not a"
-          % len(df))
-    print("result -- one message changing side moves F1 by more than that.")
+    # This used to print a fixed verdict -- "about three thousandths of F1,
+    # which is not a result" -- and went on printing it after refitting the
+    # vectoriser per fold moved the margin to +0.026. A tool whose job is to
+    # re-check a claim should not have the old claim typed into it, so the
+    # verdict is left to whoever reads the two rows above.
+    print("Near F1 0.85 on %d messages, one spam changing side moves F1 by"
+          " about 0.003." % len(df))
 
 
 def sweep_c(df, y):
     """Where EMBEDDING_C should sit, on the features it is actually used on."""
-    both = features(df, lexical=True, semantic=True)
+    both = features(df, y, lexical=True, semantic=True)
     print()
     print("=" * 94)
     print("EMBEDDING_C, balanced logistic regression on tf-idf + embeddings")

@@ -275,3 +275,66 @@ def test_cleaning_is_what_the_cli_does(client):
 
 def test_the_page_loads(client):
     assert client.get("/").status_code == 200
+
+
+# ------------------------------------------------------- found in audit 2
+
+def test_the_classifier_is_named_by_what_was_chosen_not_by_its_wrapper(client):
+    """The page's "Classifier" line read "Thresholded" -- the class name of
+    the wrapper every trained model comes back in, so the same word whichever
+    of the three candidates won. The published browser build said it too."""
+    model, _ = web.ensure_model()
+    body = client.get("/api/model").get_json()
+    assert body["name"] != "Thresholded"
+    assert body["name"] == model.name
+    assert body["name"] in clf.spamlib.candidate_models()
+
+    # And the two fallbacks: nothing loaded, and an estimator not wrapped.
+    from sklearn.naive_bayes import MultinomialNB
+    assert web.model_display_name(None) is None
+    assert web.model_display_name(MultinomialNB()) == "MultinomialNB"
+
+
+@pytest.mark.parametrize("url", ["/api/classify", "/api/batch"])
+@pytest.mark.parametrize("body", [["free money now"], "free money", 7, True],
+                         ids=["list", "string", "number", "bool"])
+def test_a_json_body_that_is_not_an_object_is_400_not_500(client, url, body):
+    """`get_json() or {}` covered a missing or malformed body. A well-formed
+    one that was not an object got through, and `body.get` raised
+    AttributeError before any validation ran."""
+    res = client.post(url, json=body)
+    assert res.status_code == 400
+    assert res.get_json()["ok"] is False
+
+
+def test_a_body_too_large_to_be_a_legal_request_is_refused_before_parsing(client):
+    """The character caps are checked after the body has been read and
+    decoded, so they bound the classifying and not the parsing: a 30 MB POST
+    was read into memory and JSON-decoded, then answered 400."""
+    oversized = b'{"message": "' + b"x" * (30 * 1024 * 1024) + b'"}'
+    res = client.post("/api/classify", data=oversized,
+                      content_type="application/json")
+    assert res.status_code == 413
+
+
+def test_the_body_limit_still_admits_the_largest_legal_batch():
+    """The other side of the limit: a full batch of full-length messages,
+    in the most expensive JSON encoding there is (every character a
+    six-byte escape such as \\u00e9), must still fit."""
+    import json
+    batch = json.dumps({"messages": ["é" * web.MAX_MESSAGE_CHARS]
+                        * web.MAX_BATCH}, ensure_ascii=True)
+    assert len(batch.encode("ascii")) <= web.app.config["MAX_CONTENT_LENGTH"]
+
+
+def test_the_model_note_does_not_describe_a_split_that_does_not_exist():
+    """The side panel said "Scored on a held-out split of 412 messages" under
+    scores that are out of fold over all 412 -- while the footer of the same
+    page said the opposite. app.js is copied into the browser build byte for
+    byte, so the published page said it as well."""
+    source = open(os.path.join(ROOT, "static", "js", "app.js"),
+                  encoding="utf-8").read()
+    note = source[source.index("$('mNote').textContent"):]
+    note = note[:note.index(";")]
+    assert "split" not in note
+    assert "out of fold" in note

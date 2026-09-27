@@ -38,11 +38,13 @@ flags nothing. So the threshold is the one that maximises F1 subject to
 precision staying at or above PRECISION_FLOOR, chosen on out-of-fold
 predictions so no message helps choose the cut that judges it.
 
-On the same corpus: MultinomialNB at the default 0.5 scores F1 0.785 at
-precision 0.924; at the chosen cut it scores F1 0.842 at precision 0.904.
-Ten points of recall for two of precision. Raising the floor is expensive
-and the numbers are worth knowing before anyone tries: at 0.95 the best F1
-available falls to 0.704, and at 0.98 to 0.475.
+On the same corpus: MultinomialNB at the default 0.5 scores F1 0.799 at
+precision 0.933 (recall 0.698); at the chosen cut it scores F1 0.850 at
+precision 0.900 (recall 0.804). Eleven points of recall for three of
+precision. Raising the floor is expensive and the numbers are worth knowing
+before anyone tries: at 0.95 the best F1 available falls to 0.614, and at
+0.98 to 0.494. (Measured with the vectoriser refitted inside every fold;
+the figures this paragraph carried before had gone stale with the corpus.)
 
 **The threshold travels with the model.** `train_and_evaluate` returns the
 estimator wrapped in `Thresholded`, whose `predict` applies the cut. Callers
@@ -52,8 +54,9 @@ disk cannot forget the one it was chosen with.
 
 **There is a second, optional feature backend.** `embeddings=True` stacks
 sentence-transformer columns beside the tf-idf ones. It is off by default
-because it was measured and is worth about +0.003 F1 -- see the numbers in
-`embeddings.py`. The two backends are interchangeable through
+because it costs two gigabytes of dependencies and cannot be exported into
+the browser build; measured, it is worth about +0.026 F1 -- see the numbers
+in `embeddings.py`. The two backends are interchangeable through
 `wants_raw_text`/`vectorize`/`frame_features` below, so nothing outside this
 module needs to know which one is loaded; in particular `classify.py` reads
 an embedding-backed artifact without having heard of embeddings.
@@ -66,12 +69,13 @@ import string
 
 import numpy as np
 import pandas as pd
+from sklearn.base import clone
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (accuracy_score, classification_report,
                              confusion_matrix, f1_score, precision_score,
                              recall_score)
-from sklearn.model_selection import StratifiedKFold, cross_val_predict
+from sklearn.model_selection import StratifiedKFold
 from sklearn.naive_bayes import ComplementNB, MultinomialNB
 
 # The project root, not this package: the corpus, the legacy CSV and the
@@ -93,11 +97,11 @@ NGRAM_RANGE = (1, 2)
 MIN_DF = 1
 STOP_WORDS = None          # "free", "win" and "call" are the signal here
 
-# Model selection. TEST_SIZE is not used by the trainer any more -- model
-# choice is cross-validated -- but app.py still takes a hold-out split for
-# the figures it shows, and both façade modules re-export this so the two
-# cannot drift to different numbers.
-TEST_SIZE = 0.25
+# Model selection, and the figures the web app shows: both are scored out of
+# fold over the same seeded CV_FOLDS, so both façade modules re-export these
+# and the two cannot drift to different folds. There used to be a TEST_SIZE
+# here too, with a comment saying app.py still took a hold-out split with
+# it. Nothing had read it since app.py moved to `metrics()`.
 RANDOM_STATE = 42
 CV_FOLDS = 5
 MAX_ITER = 2000
@@ -109,11 +113,12 @@ MAX_ITER = 2000
 # `python tools/compare_backends.py --sweep-c`, F1 at the precision floor:
 #
 #     C     0.1    1.0    3.0   10.0   30.0  100.0
-#     F1  0.655  0.760  0.835  0.853  0.856  0.853
+#     F1  0.669  0.850  0.860  0.876  0.870  0.871
 #
-# So the default would cost nine points of F1, and everything from 10 up is
-# one plateau. 30 is a thousandth better and that thousandth is noise on 412
-# messages; 10 is the shoulder, which is the defensible place to stand.
+# (Re-measured with the vectoriser refitted inside every fold.) So the
+# default would cost two and a half points of F1, and everything from 10 up
+# is one plateau, with 10 at its top; the differences above it are a message
+# or two on 412, and 10 is the defensible place to stand.
 EMBEDDING_C = 10.0
 
 # The precision the filter is held to. See the note above on what raising it
@@ -390,8 +395,9 @@ def candidate_models(embeddings=False):
     linear boundary cannot use -- and it was measured rather than assumed.
     On embeddings alone it is the best of the three (F1 0.833 against 0.805
     for logistic regression), and on the combined features this backend
-    actually builds it is the worst (0.845 against 0.853). It was also most
-    of the 90 seconds the comparison took, because `probability=True` fits a
+    actually builds it was the worst (0.845 against 0.853, measured before
+    the vectoriser was refitted per fold: read the pair, not the level). It
+    was also most of the 90 seconds the comparison took, because `probability=True` fits a
     Platt calibration by internal cross-validation inside every outer fold,
     and that parameter is deprecated in scikit-learn 1.9 besides. Measured,
     beaten, and removed.
@@ -410,12 +416,45 @@ def candidate_models(embeddings=False):
     }
 
 
-def _out_of_fold_scores(estimator, X, y):
-    """P(spam) for every row, from a fold that did not train on it."""
+def fold_features(vectorizer, df, y):
+    """(train rows, test rows, X_train, X_test) for every fold.
+
+    The extractor is refitted on each training fold, never on the corpus as
+    a whole. This used to vectorise all 412 messages once and hand that
+    matrix to `cross_val_predict` -- so the vocabulary and every idf weight
+    had been learned from the very message being scored. A word that
+    appears in one message only still got a column, a naive-Bayes weight,
+    and a share of the row's l2 norm, all courtesy of a fold that was
+    supposed never to have seen it. "Out of fold" has to include the
+    features, not just the estimator.
+
+    `clone(..., safe=False)` gives an unfitted TfidfVectorizer with the same
+    configuration, and a copy of anything else (the embedding backend),
+    whose `fit_transform` refits its lexical half from scratch.
+
+    Computed once and shared by every candidate, because the folds depend
+    only on `y` and the seed, never on the estimator.
+    """
     cv = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True,
                          random_state=RANDOM_STATE)
-    return cross_val_predict(estimator, X, y, cv=cv,
-                             method="predict_proba")[:, 1]
+    folds = []
+    for train, test in cv.split(np.zeros((len(y), 1)), y):
+        fresh = clone(vectorizer, safe=False)
+        folds.append((train, test,
+                      frame_features(fresh, df.iloc[train], fit=True),
+                      frame_features(fresh, df.iloc[test])))
+    return folds
+
+
+def _out_of_fold_scores(estimator, folds, y):
+    """P(spam) for every row, from a fold that trained on neither the row
+    nor any feature learned from it. `folds` is `fold_features(...)`."""
+    y = np.asarray(y)
+    scores = np.zeros(len(y), dtype=float)
+    for train, test, X_train, X_test in folds:
+        fitted = clone(estimator).fit(X_train, y[train])
+        scores[test] = fitted.predict_proba(X_test)[:, 1]
+    return scores
 
 
 def compare_models(df, verbose=True, embeddings=False):
@@ -429,9 +468,11 @@ def compare_models(df, verbose=True, embeddings=False):
     X = frame_features(vectorizer, df, fit=True)
     y = df["label"].map(LABELS).to_numpy()
 
+    folds = fold_features(vectorizer, df, y)
+
     results = []
     for name, estimator in candidate_models(embeddings=embeddings).items():
-        scores = _out_of_fold_scores(estimator, X, y)
+        scores = _out_of_fold_scores(estimator, folds, y)
         threshold, precision, recall, f1 = choose_threshold(scores, y)
         results.append({"name": name, "estimator": estimator,
                         "threshold": threshold, "precision": precision,
@@ -512,12 +553,11 @@ def metrics(df, model, vectorizer):
     small reads about ten points high, and a figure on a page that flatters
     the model is worse than no figure.
     """
-    X = frame_features(vectorizer, df)
     y = df["label"].map(LABELS).to_numpy()
 
     estimator = getattr(model, "estimator", model)
     threshold = getattr(model, "threshold", 0.5)
-    scores = _out_of_fold_scores(estimator, X, y)
+    scores = _out_of_fold_scores(estimator, fold_features(vectorizer, df, y), y)
     flagged = (scores >= threshold).astype(int)
 
     return {
@@ -547,12 +587,19 @@ def load_artifacts(model_path=None, vectorizer_path=None):
     made it untestable and meant importing it handed the caller a function
     able to end their process. What to do about a missing model is main()'s
     decision.
+
+    Any failure to unpickle counts as missing, not a chosen few. The list
+    used to be five exception types, and a truncated or overwritten
+    artifact raises none of them -- joblib reports garbage as a KeyError --
+    so one interrupted save left the web app answering 500 on every request
+    instead of retraining. Both paths are fixed files beside the code, never
+    anything a request can name.
     """
     import joblib
     try:
         return (joblib.load(model_path or MODEL_PATH),
                 joblib.load(vectorizer_path or VECTORIZER_PATH))
-    except (OSError, EOFError, ValueError, AttributeError, ModuleNotFoundError):
+    except Exception:
         return None, None
 
 

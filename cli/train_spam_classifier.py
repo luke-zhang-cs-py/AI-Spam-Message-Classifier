@@ -24,7 +24,7 @@ import sys
 from pipeline import spamlib
 from pipeline.spamlib import (DATA_DIR, EMBEDDING_C, LEGACY_DATA_PATH, MAX_ITER, MIN_DF,
                      MODEL_PATH, NGRAM_RANGE, PRECISION_FLOOR, RANDOM_STATE,
-                     STOP_WORDS, TEST_SIZE, VECTORIZER_PATH, Thresholded,
+                     STOP_WORDS, CV_FOLDS, VECTORIZER_PATH, Thresholded,
                      build_vectorizer, clean_text, compare_models,
                      describe_features, frame_features, load_data, metrics,
                      predict_message, spam_probability, train_and_evaluate,
@@ -60,7 +60,7 @@ __all__ = [
     "DATA_DIR", "DATA_PATH", "EMBEDDING_C", "LEGACY_DATA_PATH", "MAX_ITER",
     "MIN_DF",
     "MODEL_PATH", "NGRAM_RANGE", "PRECISION_FLOOR", "RANDOM_STATE",
-    "STOP_WORDS", "TEST_SIZE",
+    "STOP_WORDS", "CV_FOLDS",
     "VECTORIZER_PATH", "Thresholded", "build_vectorizer", "clean_text",
     "compare_models", "describe_features", "frame_features",
     "load_artifacts", "load_data", "metrics", "predict_message",

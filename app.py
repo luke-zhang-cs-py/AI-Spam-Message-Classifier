@@ -39,6 +39,15 @@ app = Flask(__name__)
 MAX_MESSAGE_CHARS = 20_000
 MAX_BATCH = 200
 
+# The caps above are applied after the body has been read and parsed, so on
+# their own they bound the classifying and not the parsing: a 500 MB POST was
+# read into memory and handed to the JSON decoder before anything looked at
+# its length. This bounds the body itself, with room for a full batch of
+# full-length messages in the worst JSON encoding (six bytes per character,
+# for a \uXXXX escape), and Flask answers 413 above it.
+MAX_BODY_BYTES = 6 * MAX_BATCH * MAX_MESSAGE_CHARS + 64 * 1024
+app.config["MAX_CONTENT_LENGTH"] = MAX_BODY_BYTES
+
 _state = {"model": None, "vectorizer": None, "name": None,
           "metrics": None, "datasetSize": None}
 _lock = threading.Lock()
@@ -65,7 +74,16 @@ def reset():
 # ---------------------------------------------------------------------------
 
 def model_display_name(model):
-    return type(model).__name__ if model is not None else None
+    """The name the page prints next to "Classifier".
+
+    It printed "Thresholded" -- the class name of the wrapper every trained
+    model comes back in, and so the same word whichever model the comparison
+    chose. The wrapper carries the name it was chosen under, so that is the
+    one shown; a bare estimator still falls back to its class name.
+    """
+    if model is None:
+        return None
+    return getattr(model, "name", None) or type(model).__name__
 
 
 def retrain_with_embeddings():
@@ -316,9 +334,21 @@ def api_model():
                         "datasetSize": _state["datasetSize"]})
 
 
+def json_body():
+    """The request's JSON object, or {} if it is not one.
+
+    `get_json(...) or {}` covered a missing or malformed body and nothing
+    else: a well-formed body that is not an object -- `[]`, `"hi"`, `7` --
+    came through, and the next line's `body.get` raised AttributeError, so
+    the reply was a 500 instead of the 400 every other bad body gets.
+    """
+    body = request.get_json(force=True, silent=True)
+    return body if isinstance(body, dict) else {}
+
+
 @app.route("/api/classify", methods=["POST"])
 def api_classify():
-    body = request.get_json(force=True, silent=True) or {}
+    body = json_body()
     message = body.get("message")
     if not isinstance(message, str) or not message.strip():
         return jsonify({"ok": False, "error": "Type a message first."}), 400
@@ -363,7 +393,7 @@ def clean_batch(raw):
 
 @app.route("/api/batch", methods=["POST"])
 def api_batch():
-    body = request.get_json(force=True, silent=True) or {}
+    body = json_body()
     try:
         messages = clean_batch(body.get("messages"))
     except ValueError as exc:

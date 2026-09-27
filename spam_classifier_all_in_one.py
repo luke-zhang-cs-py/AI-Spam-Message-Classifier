@@ -35,7 +35,7 @@ from pipeline import spamlib
 # Re-exported for the callers that already import them from here. Spelled
 # out rather than star-imported so what this module promises is readable.
 from pipeline.spamlib import (EMBEDDING_C, MAX_ITER, MIN_DF, MODEL_PATH, NGRAM_RANGE,
-                     PRECISION_FLOOR, RANDOM_STATE, STOP_WORDS, TEST_SIZE,
+                     CV_FOLDS, PRECISION_FLOOR, RANDOM_STATE, STOP_WORDS,
                      VECTORIZER_PATH, Thresholded, build_vectorizer,
                      clean_text, compare_models, describe_features,
                      frame_features, load_data, metrics, predict_message,
@@ -72,7 +72,7 @@ def save_model(model, vectorizer, model_path=None, vectorizer_path=None):
 __all__ = [
     "EMBEDDING_C", "MAX_ITER", "MIN_DF", "MODEL_PATH", "NGRAM_RANGE",
     "PRECISION_FLOOR", "RANDOM_STATE",
-    "STOP_WORDS", "TEST_SIZE", "VECTORIZER_PATH", "Thresholded",
+    "STOP_WORDS", "CV_FOLDS", "VECTORIZER_PATH", "Thresholded",
     "build_vectorizer", "clean_text",
     "compare_models", "describe_features", "frame_features",
     "load_artifacts", "load_data", "metrics",
@@ -159,8 +159,8 @@ def main(argv=None, read=None):
     # is accepted as well because it is the obvious guess.
     parser.add_argument("--classify", "--message", dest="classify",
                         help="classify one message with the saved model")
-    # Off by default because it was measured: +0.003 F1 for ~2 GB of
-    # dependencies, and worse than tf-idf on its own. See embeddings.py.
+    # Off by default: +0.026 F1 measured, for ~2 GB of dependencies and a
+    # model the browser build cannot carry. See embeddings.py.
     parser.add_argument("--embeddings", action="store_true",
                         help="add sentence-transformer features (needs the "
                              "optional extras and a local encoder)")

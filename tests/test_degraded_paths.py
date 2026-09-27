@@ -284,3 +284,62 @@ def test_the_embedding_features_can_skip_normalising_entirely():
     vocabulary = set(features.lexical.get_feature_names_out())
     assert "shortcodetoken" not in vocabulary, "the cleaner ran anyway"
     assert "80086" in vocabulary, "the literal short code should survive"
+
+
+# --------------------------------------------------- a damaged artifact
+
+@pytest.mark.parametrize("damage", [b"", b"not a pickle at all"],
+                         ids=["truncated to nothing", "overwritten"])
+def test_a_damaged_artifact_reads_as_missing_rather_than_raising(tmp_path,
+                                                                 monkeypatch,
+                                                                 damage):
+    """Each loader promises (None, None) for a model it cannot use, and each
+    caller relies on that to retrain or to say what to run. joblib reports
+    an overwritten file as a KeyError, which spamlib's five-type list did
+    not include, and cli/classify.py kept its own loader that caught
+    FileNotFoundError only. So one interrupted save left the web app
+    answering 500 on every request, and the CLI with a traceback."""
+    from cli import classify as classify_cli
+
+    broken = tmp_path / "model.joblib"
+    broken.write_bytes(damage)
+    assert spamlib.load_artifacts(str(broken), str(broken)) == (None, None)
+
+    monkeypatch.setattr(classify_cli, "MODEL_PATH", str(broken))
+    monkeypatch.setattr(classify_cli, "VECTORIZER_PATH", str(broken))
+    assert classify_cli.load_artifacts() == (None, None)
+
+
+# ----------------------------------------------------- leakage between folds
+
+def test_a_word_only_the_scored_message_contains_cannot_move_its_score():
+    """The out-of-fold scores were out of fold for the estimator and not for
+    the features: the corpus was vectorised once, as a whole, and the matrix
+    handed to cross-validation. So a word appearing in one message only
+    still had a column, an idf weight, a fitted naive-Bayes log-probability
+    and a share of that message's l2 norm -- all learned, in part, from the
+    message being scored.
+
+    If the extractor is fitted inside each fold, a word the training folds
+    never saw is simply not in the vocabulary, and adding it to the scored
+    message changes nothing about that message's score. Fold membership
+    depends only on the labels and the seed, so it is the same row, in the
+    same fold, both times.
+    """
+    from sklearn.naive_bayes import MultinomialNB
+
+    corpus = spamlib.load_data()
+    y = corpus["label"].map(spamlib.LABELS).to_numpy()
+    before = spamlib._out_of_fold_scores(
+        MultinomialNB(), spamlib.fold_features(spamlib.build_vectorizer(),
+                                               corpus, y), y)
+
+    marked = corpus.copy()
+    row = 0
+    marked.loc[row, "text"] = marked.loc[row, "text"] + " zqxvjk"
+    marked.loc[row, "clean_text"] = spamlib.clean_text(marked.loc[row, "text"])
+    after = spamlib._out_of_fold_scores(
+        MultinomialNB(), spamlib.fold_features(spamlib.build_vectorizer(),
+                                               marked, y), y)
+
+    assert after[row] == before[row]

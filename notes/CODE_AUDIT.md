@@ -211,3 +211,46 @@ separately in effect** — the comment was written for the state the author
 intended, not the state the code reached, and it then hid the remainder for
 however long it took somebody to check. A test would not have had that
 problem, which is why the guard is now a test.
+
+## Second audit
+
+**138 tests, 100% of 525 statements before; 153 tests, 100% of 538 after.**
+Every fix below has a test that failed against the code before it -- checked
+by stashing the source and running the new tests (15 of 15 red).
+
+**Logical -- leakage between folds.** `compare_models` and `metrics`
+vectorised the whole corpus once and handed that matrix to
+`cross_val_predict`, so the vocabulary and idf of every fold had been
+learned partly from the messages it scored. `fold_features` now refits the
+extractor inside each training fold. The winner's F1, precision and recall
+are unchanged (0.850 / 0.900 / 0.804); its cut moved 0.4559 -> 0.4576;
+logistic regression rose 0.761 -> 0.777; and the embedding backend rose
+0.853 -> 0.876, which turns "worth one message" into "worth eight". It
+stays off by default -- two gigabytes, and not exportable to the browser
+build -- but that is now a decision about cost, not about the margin.
+Guard: appending a word to one message must not move that message's score.
+
+**Functional -- the page named every model "Thresholded".**
+`model_display_name` printed the wrapper's class, and the browser build
+published it.
+
+**Runtime -- a JSON body that is not an object was a 500.** `[]`, `"hi"`,
+`7` passed `get_json() or {}` and `body.get` raised. `json_body()` fixes
+both routes; the browser build now replays those bodies against both sides.
+
+**Runtime -- one damaged artifact broke the app.** joblib reports garbage
+as `KeyError`, outside the loader's five-type list, so an interrupted save
+meant 500 on every request instead of a retrain. `cli/classify.py` had its
+own loader (duplicate code) catching `FileNotFoundError` only; it delegates.
+
+**Security -- request size.** The character caps ran after the whole body
+had been read and parsed. `MAX_CONTENT_LENGTH` sits just above the largest
+legal batch in its most expensive JSON encoding; Flask answers 413 beyond.
+
+**Dispensables.** `TEST_SIZE` (dead since `evaluate()` moved to
+cross-validation, and described on the published page as "the quarter the
+web UI scores against") is gone, replaced in the shared-constant checks by
+`CV_FOLDS`, which is what the two sides really have to agree on. The dead
+`partition` in `cli/classify.classify`. A side-panel note describing a
+"held-out split" that did not exist, stale docstring figures in `spamlib`,
+and a coverage sentence that read "the uncovered 0 statements" at 100%.

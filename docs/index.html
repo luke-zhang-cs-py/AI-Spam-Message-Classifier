@@ -254,13 +254,16 @@ footer a { color: inherit; }
       <p id="corpusNote"></p>
     </div>
     <div>
-      <h3>4. The transformer is worth one message</h3>
+      <h3>4. The transformer is worth eight messages</h3>
       <p>
-        The optional embedding backend scores F1 0.853 against 0.850, and the
-        confusion matrices say what that means: <strong>one more spam caught
-        out of 179</strong>, for about two gigabytes of dependencies. It is
-        off by default, and the measurement is
-        <code>tools/compare_backends.py</code> rather than a claim.
+        The optional embedding backend scores F1 0.876 against 0.850, and the
+        confusion matrices say what that means: <strong>eight more spam caught
+        out of 179</strong>, at the same sixteen false alarms, for about two
+        gigabytes of dependencies and a model this page could not carry. It
+        read 0.853 &mdash; one message &mdash; until the vectoriser was
+        refitted inside each fold. It is still off by default, and the
+        measurement is <code>tools/compare_backends.py</code> rather than a
+        claim.
       </p>
     </div>
   </div>
@@ -334,8 +337,10 @@ footer a { color: inherit; }
   <h2>Bugs, and what found each one</h2>
   <p class="sub">
     Six were found in one pass over the web front end, before which there
-    were no tests at all. The last two came from an audit and are the more
-    interesting kind: code that was not wrong yet.
+    were no tests at all. The next two came from an audit and are the more
+    interesting kind: code that was not wrong yet. The last six came from a
+    second audit, and the first of them is the one that matters: the
+    out-of-fold figures had been leaking vocabulary between folds.
   </p>
   <table>
     <thead>
@@ -379,26 +384,26 @@ footer a { color: inherit; }
  * `python tools/refresh_figures.py` rewrites them. */
 
 var MODULES = [
-  { name: 'pipeline/spamlib.py',           lines: 572, stmts: 195, missed:  0, does: 'the one implementation: normalising, model choice, the tuned threshold' },
-  { name: 'app.py',                        lines: 399, stmts: 118, missed:  0, does: 'the web UI, five endpoints, and the per-word explanation' },
-  { name: 'pipeline/embeddings.py',        lines: 282, stmts:  80, missed:  0, does: 'the optional transformer backend, off by default and measured' },
+  { name: 'pipeline/spamlib.py',           lines: 619, stmts: 206, missed:  0, does: 'the one implementation: normalising, model choice, the tuned threshold' },
+  { name: 'app.py',                        lines: 429, stmts: 125, missed:  0, does: 'the web UI, five endpoints, and the per-word explanation' },
+  { name: 'pipeline/embeddings.py',        lines: 293, stmts:  80, missed:  0, does: 'the optional transformer backend, off by default and measured' },
   { name: 'spam_classifier_all_in_one.py', lines: 197, stmts:  64, missed:  0, does: 'the end-to-end demo and CLI; the pipeline itself moved to spamlib' },
-  { name: 'cli/classify.py',               lines: 111, stmts:  34, missed:  0, does: 'one message from the command line, or an interactive loop' },
   { name: 'cli/train_spam_classifier.py',  lines: 111, stmts:  34, missed:  0, does: 'trains both models, compares them, saves the winner' },
+  { name: 'cli/classify.py',               lines: 104, stmts:  29, missed:  0, does: 'one message from the command line, or an interactive loop' },
   { name: 'cli/__init__.py',               lines:   7, stmts:   0, missed:  0, does: 'the package: train it, then ask it about a message' },
   { name: 'pipeline/__init__.py',          lines:   6, stmts:   0, missed:  0, does: 'the package: the filter, and its one optional backend' }
 ];
 
 var TESTS = [
+  { file: 'test_app.py',                 n: 44, of: 'the five endpoints, the caps, and the vanishing metrics' },
   { file: 'test_embeddings.py',          n: 39, of: 'the optional backend, almost all of it without torch installed' },
-  { file: 'test_app.py',                 n: 32, of: 'the five endpoints, the caps, and the vanishing metrics' },
   { file: 'test_duplication_and_cli.py', n: 24, of: 'that the three entry points share one recipe' },
   { file: 'test_cli_entry_points.py',    n: 21, of: 'both command lines driven in process, where coverage can see them' },
-  { file: 'test_degraded_paths.py',      n: 11, of: 'the fallback corpus, an unreachable floor, a model with no weights' },
+  { file: 'test_degraded_paths.py',      n: 14, of: 'the fallback corpus, an unreachable floor, a model with no weights' },
   { file: 'test_published_figures.py',   n: 11, of: 'the numbers on this page, against a fresh measurement' }
 ];
 
-var TEST_LINES = 2417;
+var TEST_LINES = 2539;
 
 /* Which interpreter produced the statement counts above. It matters: coverage
  * counts a `with` block or a multi-line call differently between versions, so
@@ -415,24 +420,25 @@ var ROUTE_COUNT = 5;
 var DATA = { messages: 412, spam: 179, ham: 233, folds: 5, floor: 0.90 };
 
 /* Out-of-fold: every probability comes from a fold that did not train on the
- * message it scores, so all 412 are held-out data exactly once. The last row
+ * message it scores -- the vectoriser included, refitted inside each fold --
+ * so all 412 are held-out data exactly once. The last row
  * is the optional embedding backend, which is off by default. */
 var MODELS = [
-  { name: 'Multinomial Naive Bayes', threshold: 0.4559, accuracy: 0.876,
+  { name: 'Multinomial Naive Bayes', threshold: 0.4576, accuracy: 0.876,
     precision: 0.900, recall: 0.804, f1: 0.850, tn: 217, fp: 16, fn: 35, tp: 144 },
-  { name: 'Complement Naive Bayes', threshold: 0.5222, accuracy: 0.876,
+  { name: 'Complement Naive Bayes', threshold: 0.5238, accuracy: 0.876,
     precision: 0.900, recall: 0.804, f1: 0.850, tn: 217, fp: 16, fn: 35, tp: 144 },
-  { name: 'Logistic Regression', threshold: 0.4681, accuracy: 0.820,
-    precision: 0.901, recall: 0.659, f1: 0.761, tn: 220, fp: 13, fn: 61, tp: 118 },
-  { name: 'Logistic Regression (balanced) + embeddings', threshold: 0.6656,
-    accuracy: 0.879,
-    precision: 0.901, recall: 0.810, f1: 0.853, tn: 217, fp: 16, fn: 34, tp: 145 }
+  { name: 'Logistic Regression', threshold: 0.5038, accuracy: 0.830,
+    precision: 0.904, recall: 0.682, f1: 0.777, tn: 220, fp: 13, fn: 57, tp: 122 },
+  { name: 'Logistic Regression (balanced) + embeddings', threshold: 0.5997,
+    accuracy: 0.896,
+    precision: 0.905, recall: 0.849, f1: 0.876, tn: 217, fp: 16, fn: 27, tp: 152 }
 ];
 
 var STEPS = [
   '<strong>Normalise</strong> — fold case, then replace each noisy part with a token for its <em>kind</em>: <code>urltoken</code>, <code>moneytoken</code>, <code>shortcodetoken</code>. The earlier version deleted them, which threw away the most informative thing in a smishing text.',
   '<strong>Vectorise</strong> — <code>TfidfVectorizer</code> over unigrams and bigrams, sublinear, no stop-word list: "free", "win" and "call" are the signal here.',
-  '<strong>Compare three estimators</strong> — two Naive Bayes variants and logistic regression, each scored with <code>cross_val_predict</code> so no message is judged by a fold that trained on it.',
+  '<strong>Compare three estimators</strong> — two Naive Bayes variants and logistic regression, each scored out of fold with the vectoriser refitted inside every fold, so no message is judged by a fold that trained on it or learned a word from it.',
   '<strong>Choose the threshold</strong> — the cut with the best F1 whose precision stays at or above the floor. Predicting at 0.5 leaves the most consequential dial untouched.',
   '<strong>Keep the best</strong> — by F1, then by precision. The threshold is wrapped into the model, so an artifact cannot forget the cut it was chosen with.',
   '<strong>Infer</strong> — a new message goes through the same normalising, then scored against that cut, then explained word by word.'
@@ -441,7 +447,7 @@ var STEPS = [
 /* The six constants the three entry points must agree on, checked with `is`
  * rather than equality by tests/test_duplication_and_cli.py. */
 var CONSTANTS = [
-  ['TEST_SIZE', '0.25 — the quarter the web UI scores against'],
+  ['CV_FOLDS', '5 — the folds the trainer and the web UI both score over'],
   ['RANDOM_STATE', '42 — so the folds are the same every run'],
   ['NGRAM_RANGE', '(1, 2) — unigrams and bigrams'],
   ['MIN_DF', '1 — every token counts, on a dataset this small'],
@@ -475,7 +481,25 @@ var BUGS = [
    'An audit pass — and confirmed by running the new guards against the old code', 'fixed'],
   ['Four constants that had to agree, and nothing checked',
    '<code>NGRAM_RANGE</code>, <code>MIN_DF</code>, <code>stop_words</code> and <code>max_iter</code> were written out separately in the trainer. Every value happened to match, so there was no live bug — but <code>evaluate()</code> scores a model loaded from disk by rebuilding the trainer’s split, and that quarter is only held-out data if it is the <em>same</em> quarter. A split changed in one file and not the other has the app scoring a model against its own training data and reporting the inflated number as accuracy.',
-   'An audit pass. Not wrong yet, which is the point', 'fixed']
+   'An audit pass. Not wrong yet, which is the point', 'fixed'],
+  ['“Out of fold” was out of fold for the model, not for the features',
+   'The corpus was vectorised once, as a whole, and that matrix handed to cross-validation — so the vocabulary and every idf weight had been learned partly from the message being scored. A word appearing in one message only still got a column, a naive-Bayes weight and a share of that message’s norm. The vectoriser is refitted inside each fold now. The winner’s F1, precision and recall came out identical; its cut moved from 0.4559 to 0.4576, and logistic regression, which the leak had been hurting, rose from F1 0.761 to 0.777. A test appends a word to one message and requires that message’s score not to move.',
+   'An audit pass reading the evaluation against the checklist item “leakage between folds”', 'fixed'],
+  ['The page named every model “Thresholded”',
+   'The Classifier line printed the class name of the wrapper every trained model comes back in — the same word whichever of the three candidates won — and the browser build published it. It prints the name the comparison chose it under now.',
+   'Reading the exported model data', 'fixed'],
+  ['A JSON body that was not an object came back 500',
+   '<code>get_json() or {}</code> covered a missing or malformed body. A well-formed <code>[]</code>, <code>"hi"</code> or <code>7</code> got through, and <code>body.get</code> raised before any validation ran. Both routes answer 400 now, and the browser build replays those bodies against Flask and the shim.',
+   'Posting the wrong shape on purpose, again', 'fixed'],
+  ['One damaged artifact broke the app until someone deleted it',
+   'joblib reports an overwritten file as a <code>KeyError</code>, which was not among the five exceptions the loader treated as “no model” — so an interrupted save left every request answering 500 instead of retraining. <code>cli/classify.py</code> had its own loader that caught <code>FileNotFoundError</code> only; it uses the shared one now.',
+   'Writing garbage into the artifact on purpose', 'fixed'],
+  ['The body was read in full before any cap applied',
+   'The character caps are checked after parsing, so they bounded the classifying and not the reading: a 30 MB POST was read and JSON-decoded, then refused. <code>MAX_CONTENT_LENGTH</code> now sits just above the largest legal batch, and Flask answers 413 beyond it.',
+   'An audit pass, on request size limits', 'fixed'],
+  ['The side panel described a split that did not exist',
+   'Under the scores it said “Scored on a held-out split” of the whole corpus — for figures that are out of fold over every message in it — while the footer of the same page said the opposite.',
+   'Reading the page against the code', 'fixed']
 ];
 
 var NEXT = [
@@ -528,12 +552,17 @@ function drawTiles() {
     'The F1 tile is the one to read carefully, and the panel below says why ' +
     'in four ways — starting with the fact that the precision beside it is ' +
     'a constraint the threshold was chosen against, not a result. ' +
-    'Coverage is ' +
-    Math.round(100 * COVERED / STMTS) + '%: the uncovered ' +
-    (STMTS - COVERED) + ' statements are the printing — the interactive ' +
-    'input() loop, the console report the trainer writes, and the ' +
-    'if-name-is-main blocks. The logic they print is covered; driving a ' +
-    'prompt to assert on stdout would test the formatting and nothing else.';
+    'Coverage is ' + Math.round(100 * COVERED / STMTS) + '%' +
+    /* This sentence used to explain the uncovered statements unconditionally,
+     * so at full coverage it read "the uncovered 0 statements are the
+     * printing". */
+    (STMTS === COVERED
+      ? ': the interactive prompts and the trainer’s console report are ' +
+        'driven in process, and only the if-name-is-main lines that start a ' +
+        'process are excluded, in .coveragerc.'
+      : ': the uncovered ' + (STMTS - COVERED) + ' statements are the ' +
+        'printing — the interactive input() loop, the console report the ' +
+        'trainer writes, and the if-name-is-main blocks.');
 }
 
 /* --------------------------------------------------------------- charts */
@@ -653,10 +682,12 @@ function drawSteps() {
     'out again, and a test checks each with "is" rather than equality — ' +
     'because ' +
     'two separately declared constants that happen to be equal would pass an ' +
-    'equality check and still be two constants. The one that matters most is ' +
-    'the split: evaluate() scores a model from disk by rebuilding the ' +
-    'trainer’s split, and that quarter is only held-out data if it is the ' +
-    'same quarter.';
+    'equality check and still be two constants. The ones that matter most ' +
+    'are the folds: evaluate() re-scores a model from disk out of fold, and ' +
+    'its figures only describe the trainer’s evaluation if CV_FOLDS and ' +
+    'RANDOM_STATE draw the same folds. (A TEST_SIZE used to sit in this ' +
+    'list, for a hold-out split nothing had taken since evaluate() moved ' +
+    'to cross-validation.)';
 }
 
 function drawNext() {

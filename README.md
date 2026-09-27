@@ -34,8 +34,9 @@ message -> clean_text() -> TF-IDF (1-2 grams) -> classifier -> threshold -> spam
    0.784.
 2. **Features.** TF-IDF over unigrams and bigrams, sublinear, no stop-word
    list: "free", "win" and "call" are the signal here, not noise to strip.
-3. **Model.** MultinomialNB, ComplementNB and LogisticRegression compared with
-   `cross_val_predict`, so no message is scored by a fold that trained on it.
+3. **Model.** MultinomialNB, ComplementNB and LogisticRegression compared out
+   of fold, with the vectoriser refitted inside each fold too, so no message
+   is scored by a fold that trained on it or learned a word from it.
    One split moves F1 by several points on a corpus this size, and choosing a
    model on that is choosing a split.
 4. **Threshold.** The cut with the best F1 whose precision stays at or above
@@ -83,9 +84,9 @@ comes from a fold that did not train on the message it scores.
 
 | Model | Cut | Accuracy | Precision | Recall | F1 |
 |---|---|---|---|---|---|
-| Multinomial Naive Bayes | 0.4559 | 0.876 | 0.900 | 0.804 | **0.850** |
-| Complement Naive Bayes | 0.5222 | 0.876 | 0.900 | 0.804 | 0.850 |
-| Logistic Regression | 0.4681 | 0.820 | 0.901 | 0.659 | 0.761 |
+| Multinomial Naive Bayes | 0.4576 | 0.876 | 0.900 | 0.804 | **0.850** |
+| Complement Naive Bayes | 0.5238 | 0.876 | 0.900 | 0.804 | 0.850 |
+| Logistic Regression | 0.5038 | 0.830 | 0.904 | 0.682 | 0.777 |
 
 **Read precision carefully.** Every row sits at almost exactly 0.900 because
 that's the floor the threshold was chosen against — not because four models
@@ -125,7 +126,7 @@ never the number it compares against. There's a pass for that now.
 pytest -q
 ```
 
-138 tests, 100% of 525 statements — and those figures are checked against the
+153 tests, 100% of 538 statements — and those figures are checked against the
 repo, because a number typed into a file goes stale the moment a test is added.
 
 ## License

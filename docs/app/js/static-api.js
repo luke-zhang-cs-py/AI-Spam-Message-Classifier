@@ -167,9 +167,14 @@
     ['/api/retrain', apiRetrain]
   ];
 
+  /* The body as an object, or {} -- app.json_body's rule. JSON that parses
+     to something else (`null`, a list, a string) is treated as no body, so
+     `body.message` below is never a property read on null. */
   function parse(init) {
     if (!init || init.body === null || init.body === undefined) { return {}; }
-    try { return JSON.parse(init.body); } catch (bad) { return {}; }
+    var body;
+    try { body = JSON.parse(init.body); } catch (bad) { return {}; }
+    return (body && typeof body === 'object' && !Array.isArray(body)) ? body : {};
   }
 
   var passthrough = window.fetch ? window.fetch.bind(window) : null;

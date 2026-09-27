@@ -116,7 +116,7 @@ def test_the_split_is_defined_once():
 
     # The half that was missing. Identity rather than equality, so two
     # separately declared constants that happen to be equal do not pass.
-    for name in ("TEST_SIZE", "RANDOM_STATE", "NGRAM_RANGE", "MIN_DF",
+    for name in ("CV_FOLDS", "RANDOM_STATE", "NGRAM_RANGE", "MIN_DF",
                  "STOP_WORDS", "MAX_ITER"):
         assert getattr(trainer, name) is getattr(allinone, name), name
 

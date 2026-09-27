@@ -6,10 +6,10 @@
 # default path is what it tests; nothing here is needed to run, train, or test
 # the filter.
 #
-# What it buys, measured on the 412-message corpus: F1 0.853 against 0.850
-# for tf-idf alone, and 0.833 for embeddings on their own. Read embeddings.py
-# before deciding the install is worth it -- the honest answer today is
-# "probably not, unless the corpus is going to grow a lot".
+# What it buys, measured on the 412-message corpus: F1 0.876 against 0.850
+# for tf-idf alone (eight more spam caught out of 179, no more false alarms),
+# and 0.833 for embeddings on their own. Read embeddings.py before deciding
+# the install is worth it: the margin is real, and so are the two gigabytes.
 #
 #     pip install -r requirements-embeddings.txt
 #

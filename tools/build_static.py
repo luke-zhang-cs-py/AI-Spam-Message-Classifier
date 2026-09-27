@@ -301,6 +301,11 @@ def requests_for(messages):
         ("POST", "/api/classify", {"message": None}),
         ("POST", "/api/classify", {"message": 5}),
         ("POST", "/api/classify", {}),
+        # Well-formed JSON that is not an object. Flask answered these 500:
+        # `body.get` on a list or a string raised before any validation ran.
+        ("POST", "/api/classify", [messages[0]]),
+        ("POST", "/api/classify", "free money"),
+        ("POST", "/api/classify", 7),
         ("POST", "/api/classify", {"message": long_message}),
         ("POST", "/api/batch", {"messages": messages[:25]}),
         ("POST", "/api/batch", {"messages": ["free money now", "lunch at 1"]}),
@@ -312,6 +317,8 @@ def requests_for(messages):
         ("POST", "/api/batch", {"messages": ["ok", None]}),
         ("POST", "/api/batch", {"messages": None}),
         ("POST", "/api/batch", {}),
+        ("POST", "/api/batch", ["free money now", "lunch at 1"]),
+        ("POST", "/api/batch", "free money"),
         ("POST", "/api/batch", {"messages": ["x"] * 201}),
         ("POST", "/api/batch", {"messages": ["ok", long_message]}),
     ]
@@ -391,8 +398,10 @@ def collect_model(model, vectorizer):
     threshold = float(getattr(model, "threshold", 0.5))
 
     payload = {
-        # /api/model reports the wrapper's class name, which is what the page
-        # prints next to "Classifier".
+        # What /api/model reports and the page prints next to "Classifier":
+        # the name the comparison chose the model under. (It was the
+        # wrapper's class name, "Thresholded", until app.model_display_name
+        # was fixed.)
         "name": flask_app.model_display_name(model),
         "estimator": type(estimator).__name__,
         "chosen": getattr(model, "name", type(estimator).__name__),

@@ -13,17 +13,28 @@ PRECISION_FLOOR and the same out-of-fold threshold sweep as `spamlib`:
     tf-idf              MultinomialNB          0.900    0.804   0.850   <- default
     embeddings          LogReg                 0.903    0.726   0.805
     embeddings          RBF SVM                0.913    0.765   0.833
-    tf-idf + embeddings LogReg balanced        0.901    0.810   0.853
+    tf-idf + embeddings LogReg balanced        0.905    0.849   0.876
 
-So the transformer buys about three thousandths of F1 over tf-idf alone,
-which is noise at this sample size, and *on its own it is worse* -- 0.833
-against 0.850. That is the expected result and worth stating plainly rather
+(Re-measured with the vectoriser refitted inside every fold. The combined
+row used to read 0.853 -- three thousandths over tf-idf -- because the
+tf-idf half had been fitted on the whole corpus before cross-validation,
+and that leak cost the logistic-regression rows more than it flattered the
+naive-Bayes ones. The embeddings-only rows have no fitted vocabulary and
+did not move.)
+
+So the transformer now buys about 0.026 of F1 over tf-idf alone -- eight
+more spam caught out of 179 at the same sixteen false alarms, which is a
+real margin even at this sample size -- and *on its own it is still worse*:
+0.833 against 0.850. That is the expected result and worth stating plainly rather
 than burying: MiniLM was trained on general web text and has never seen a
 smishing corpus, while tf-idf learns this corpus's own vocabulary directly,
 and `moneytoken`, `shortcodetoken` and "claim" are strong enough evidence
 that a general-purpose sentence encoder dilutes it.
 
-It is here anyway, off by default, for two reasons. The gap should widen as
+It stays off by default for reasons the margin does not change: it is
+about two gigabytes of dependencies against sixty megabytes, and a model
+that needs a 22 MB encoder cannot be exported into the browser build. It
+is here at all for two reasons. The gap should widen as
 the corpus grows, because embeddings generalise to paraphrases a lexical
 model has never seen; and the comparison itself is worth being able to
 re-run as new material lands, which needs the code to exist.

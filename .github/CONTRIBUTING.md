@@ -33,7 +33,7 @@ pytest -q
 python -m flake8 . --select=E9,F63,F7,F82
 ```
 
-52 tests. The model is trained once per session rather than per test, so the
+The model is trained once per session rather than per test, so the
 suite runs in seconds instead of minutes.
 
 ## If you change the page, the pipeline, or the model
