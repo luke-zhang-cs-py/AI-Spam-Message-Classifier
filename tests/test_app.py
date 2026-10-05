@@ -338,3 +338,35 @@ def test_the_model_note_does_not_describe_a_split_that_does_not_exist():
     note = note[:note.index(";")]
     assert "split" not in note
     assert "out of fold" in note
+
+
+# ------------------------------------------------- other sites in the browser
+# (notes/CODE_AUDIT.md, 2026-10-05). The server binds to 127.0.0.1, which
+# keeps the network out but not a page open in the same browser.
+
+def test_a_cross_site_page_cannot_press_retrain(client, monkeypatch):
+    """get_json(force=True) reads a text/plain body, which any site can POST
+    without a preflight, so any page could retrain the model in a loop."""
+    monkeypatch.setattr(web, "_ensure_model_locked",
+                        lambda **k: pytest.fail("a cross-site request retrained"))
+    for headers in ({"Origin": "https://evil.example"}, {"Origin": "null"},
+                    {"Sec-Fetch-Site": "cross-site"}):
+        r = client.post("/api/retrain", data="{}", content_type="text/plain",
+                        headers=headers)
+        assert r.status_code == 403 and r.get_json()["ok"] is False, headers
+
+
+def test_the_page_itself_can_still_post(client):
+    for origin in ("http://127.0.0.1:5002", "http://localhost:5002",
+                   "http://[::1]:5002"):
+        r = client.post("/api/classify", json={}, headers={"Origin": origin})
+        assert r.status_code == 400, origin       # past the guard: no message
+    # A cross-site GET of the page is a link someone followed, not an attack.
+    assert client.get("/", headers={"Sec-Fetch-Site": "cross-site"}).status_code == 200
+
+
+def test_a_rebound_hostname_reads_nothing(client):
+    """A hostile name that re-resolves to 127.0.0.1 is same-origin with the
+    server; the Host header still carries the name."""
+    assert client.get("/api/model", headers={"Host": "evil.example:5002"}).status_code == 403
+    assert client.get("/", headers={"Host": "[::1]:5002"}).status_code == 200

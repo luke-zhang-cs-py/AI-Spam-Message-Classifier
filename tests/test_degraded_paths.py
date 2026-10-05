@@ -343,3 +343,42 @@ def test_a_word_only_the_scored_message_contains_cannot_move_its_score():
                                                marked, y), y)
 
     assert after[row] == before[row]
+
+
+def _choose_threshold_by_sklearn(scores, y, floor):
+    """The loop choose_threshold used to be: three sklearn metric calls per
+    cut. Kept here as the reference the counted version must agree with."""
+    from sklearn.metrics import f1_score, precision_score, recall_score
+    best = fallback = None
+    for cut in np.unique(scores):
+        flagged = (scores >= cut).astype(int)
+        if flagged.sum() == 0:
+            continue
+        row = (float(cut), precision_score(y, flagged, zero_division=0),
+               recall_score(y, flagged, zero_division=0),
+               f1_score(y, flagged, zero_division=0))
+        if fallback is None or row[3] > fallback[3]:
+            fallback = row
+        if row[1] >= floor and (best is None or row[3] > best[3]):
+            best = row
+    return best or fallback or (0.5, 0.0, 0.0, 0.0)
+
+
+def test_the_counted_threshold_search_agrees_with_sklearn():
+    """choose_threshold counts true positives from sorted arrays instead of
+    calling sklearn ~1,200 times a model, which took training from about 15
+    seconds to under one (notes/CODE_AUDIT.md, 2026-10-05). Same answer on
+    ties, NaN scores, a corpus with no spam and an unreachable floor."""
+    rng = np.random.RandomState(1)
+    for trial in range(23):
+        n = rng.randint(0, 30)
+        y = rng.randint(0, 2, n)
+        scores = np.round(rng.rand(n), rng.randint(1, 4))      # plenty of ties
+        if n and trial % 5 == 0:
+            scores[rng.randint(n)] = np.nan
+        if trial % 11 == 0:
+            y[:] = 0
+        for floor in (0.5, 0.9, 1.0):
+            want = _choose_threshold_by_sklearn(scores, y, floor)
+            got = spamlib.choose_threshold(scores, y, floor)
+            assert tuple(map(float, got)) == tuple(map(float, want)), (trial, floor)

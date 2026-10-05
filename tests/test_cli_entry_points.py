@@ -194,6 +194,27 @@ def test_the_trainer_reports_a_missing_corpus_rather_than_a_traceback(
     assert "no corpus" in capsys.readouterr().err
 
 
+def test_a_data_path_that_holds_no_corpus_is_an_error_not_the_default(
+        artifacts, tmp_path, capsys):
+    """`--data typo.csv` found no shards at the typo, fell through to
+    dataset.csv and saved a model trained on 81 messages nobody asked for,
+    exit 0 (notes/CODE_AUDIT.md, 2026-10-05)."""
+    model_path, _ = artifacts
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    for named in (tmp_path / "typo.csv", empty):
+        assert trainer.main(["--data", str(named), "--quiet"]) == 1
+        assert str(named) in capsys.readouterr().err
+    assert not os.path.exists(model_path), "it trained on something else"
+
+    shards = tmp_path / "shards"
+    shards.mkdir()
+    rows = ["label,text"] + ["spam,WIN cash now %d" % i for i in range(10)] \
+        + ["ham,see you at six %d" % i for i in range(10)]
+    (shards / "a.csv").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    assert len(spamlib.load_data(str(shards))) == 20
+
+
 def test_the_trainers_load_artifacts_wrapper_reads_its_own_paths(artifacts):
     """The wrapper exists so a monkeypatched MODEL_PATH is honoured. It was
     at 0% -- nothing had ever called this copy of it, so the property it

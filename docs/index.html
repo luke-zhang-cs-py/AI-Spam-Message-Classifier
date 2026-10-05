@@ -384,8 +384,8 @@ footer a { color: inherit; }
  * `python tools/refresh_figures.py` rewrites them. */
 
 var MODULES = [
-  { name: 'pipeline/spamlib.py',           lines: 619, stmts: 206, missed:  0, does: 'the one implementation: normalising, model choice, the tuned threshold' },
-  { name: 'app.py',                        lines: 429, stmts: 125, missed:  0, does: 'the web UI, five endpoints, and the per-word explanation' },
+  { name: 'pipeline/spamlib.py',           lines: 647, stmts: 217, missed:  0, does: 'the one implementation: normalising, model choice, the tuned threshold' },
+  { name: 'app.py',                        lines: 469, stmts: 147, missed:  0, does: 'the web UI, five endpoints, and the per-word explanation' },
   { name: 'pipeline/embeddings.py',        lines: 293, stmts:  80, missed:  0, does: 'the optional transformer backend, off by default and measured' },
   { name: 'spam_classifier_all_in_one.py', lines: 197, stmts:  64, missed:  0, does: 'the end-to-end demo and CLI; the pipeline itself moved to spamlib' },
   { name: 'cli/train_spam_classifier.py',  lines: 111, stmts:  34, missed:  0, does: 'trains both models, compares them, saves the winner' },
@@ -395,15 +395,15 @@ var MODULES = [
 ];
 
 var TESTS = [
-  { file: 'test_app.py',                 n: 44, of: 'the five endpoints, the caps, and the vanishing metrics' },
+  { file: 'test_app.py',                 n: 47, of: 'the five endpoints, the caps, and the vanishing metrics' },
   { file: 'test_embeddings.py',          n: 39, of: 'the optional backend, almost all of it without torch installed' },
   { file: 'test_duplication_and_cli.py', n: 24, of: 'that the three entry points share one recipe' },
-  { file: 'test_cli_entry_points.py',    n: 21, of: 'both command lines driven in process, where coverage can see them' },
-  { file: 'test_degraded_paths.py',      n: 14, of: 'the fallback corpus, an unreachable floor, a model with no weights' },
+  { file: 'test_cli_entry_points.py',    n: 22, of: 'both command lines driven in process, where coverage can see them' },
+  { file: 'test_degraded_paths.py',      n: 15, of: 'the fallback corpus, an unreachable floor, a model with no weights' },
   { file: 'test_published_figures.py',   n: 11, of: 'the numbers on this page, against a fresh measurement' }
 ];
 
-var TEST_LINES = 2539;
+var TEST_LINES = 2631;
 
 /* Which interpreter produced the statement counts above. It matters: coverage
  * counts a `with` block or a multi-line call differently between versions, so

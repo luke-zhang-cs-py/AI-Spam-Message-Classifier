@@ -1,5 +1,72 @@
 # Code audit
 
+## 2026-10-05: third pass
+
+The third pass over the checklist. Suite: **152 pass, 1 skip before, in
+12 min 06 s; 157 pass, 1 skip after, in 1 min 50 s** (3 min 20 s
+under coverage; with the optional encoder present). Each new regression test failed on the code as
+it was, except the threshold equivalence test, which guards a rewrite.
+
+```bash
+python -m coverage run --branch -m pytest
+python -m coverage report -m
+python tools/refresh_figures.py      # keeps docs/index.html and README true
+```
+
+### Bugs fixed
+
+| # | Class | Where | What happened | Fix | Test |
+|---|---|---|---|---|---|
+| 1 | functional / workflow | `spamlib.load_data` | A `path` that held no corpus fell through to the default fallback. `python -m cli.train_spam_classifier --data typo.csv` found no shards at the typo, loaded `dataset.csv` (81 messages), trained, saved over the real model and exited 0. The same happened for an empty directory. | The `dataset.csv` fallback applies only when no path is given. A named path with no CSV raises `FileNotFoundError` naming that path, and the trainer exits 1. | `test_a_data_path_that_holds_no_corpus_is_an_error_not_the_default` |
+| 2 | security (CSRF) | `app.py` | `get_json(force=True)` reads a `text/plain` body, which any web site can POST without a preflight. So any page open in the browser could press `/api/retrain` in a loop, pinning a core and overwriting the saved model each time. | A `before_request` hook refuses state-changing requests with a foreign or `null` Origin, or with `Sec-Fetch-Site: cross-site`. This is the guard the face-recognition project in this family already has. | `test_a_cross_site_page_cannot_press_retrain`, `test_the_page_itself_can_still_post` |
+| 3 | security (DNS rebinding) | `app.py` | A hostile name that re-resolves to 127.0.0.1 is same-origin with the server, so it could read every reply, including the classified text of pasted messages. | Requests whose Host is not 127.0.0.1, localhost or [::1] get a 403. | `test_a_rebound_hostname_reads_nothing` |
+
+### Performance (perfective)
+
+`choose_threshold` called sklearn's `precision_score`, `recall_score` and `f1_score` for each of about 400 candidate cuts, once per model. That was about 5 s per model and 15 s per comparison. Every training run, every Retrain press and most of the suite's 12 minutes went on input validation inside those calls. The function now counts true positives from two sorted arrays and computes the same ratios sklearn does (`tp/flagged`, `tp/positives`, `2tp/(positives+flagged)`). A comparison now takes under a second.
+
+The result is identical. 450 random cases (ties, NaN scores, no spam at all, unreachable floors) matched the old function exactly, and the chosen MultinomialNB cut on the real corpus is still `0.4575711671752544`, the one `docs/app/js/model-data.js` was built with. `test_the_counted_threshold_search_agrees_with_sklearn` keeps the old loop as the reference.
+
+### Checklist
+
+- **Dispensables.** Nothing new. The long docstrings are this repo's style and they are accurate.
+- **Bloaters.** `spamlib.py` (647 lines) is the whole pipeline in one module by design. Its functions are short. Left.
+- **Abusers / conditional complexity.** `clean_batch` is already a list of rules. Nothing to fix.
+- **Couplers.** `spam_classifier_all_in_one.py` and `cli/train_spam_classifier.py` re-export `spamlib` through wrappers so that the tests can monkeypatch the paths. That is a middle man kept on purpose, and documented. Left.
+- **Change preventers.** The loopback guard is now written in two repos of this family. It is small, and sharing it would mean a package. Left.
+- **Global data / magic numbers / names.** The constants are named with their reasons (`PRECISION_FLOOR`, `EMBEDDING_C`, `MAX_BODY_BYTES`). Nothing new.
+- **Out of bounds.** An empty score vector, NaN scores and a corpus with no spam are all tested in `choose_threshold`. An empty batch, a non-list batch and non-string entries are tested in `clean_batch`.
+- **XSS.** The page's `innerHTML` writes pass every server string (token, message) through `esc()`. Labels are fixed strings. Nothing found.
+- **Secrets / PII.** None in tracked files. The corpus is synthetic text. `.gitignore` covers `*.joblib`, `models/` and `.coverage`.
+- **Left, noted.** `--classify ""` is falsy, so it trains and runs the demo instead of classifying an empty message. That is harmless. `load_data` keeps the first label of a message duplicated across shards with conflicting labels. Nothing in the corpus does this today.
+
+### Coverage (after; `coverage run --branch`)
+
+| File | Lines | Branches |
+|---|---|---|
+| `app.py` | 100% (147) | 100% (44) |
+| `cli/classify.py` | 100% (29) | 100% (6) |
+| `cli/train_spam_classifier.py` | 100% (34) | 100% (6) |
+| `pipeline/embeddings.py` | 100% (80) | 100% (16) |
+| `pipeline/spamlib.py` | 100% (217) | 100% (42) |
+| `spam_classifier_all_in_one.py` | 100% (64) | 100% (20) |
+| **Total** | **100% (571)** | **100% (134)** |
+
+`tools/` is omitted by `.coveragerc` (developer scripts). The browser build (`docs/app`) is checked by `test_published_figures.py` and the build tool. It is not driven in a browser.
+
+### Maintenance types
+
+- **Corrective:** bug 1.
+- **Adaptive:** nothing needed on scikit-learn 1.9, pandas 3.0 and Flask 3.1. `candidate_models` already avoids the deprecated `SVC(probability=True)`.
+- **Perfective:** training is about 15x faster, so Retrain answers in about a second.
+- **Preventive:** the cross-site and rebinding guards (bugs 2 and 3), and the sklearn-equivalence test.
+
+### Left for later
+
+- `test_the_real_encoder_produces_the_documented_width` takes about 80 s when the encoder is installed. It is now most of the suite's run time.
+
+---
+
 First audit of this repository. It was the last of the five projects in this
 family without one, and it turned out to be the interesting case: the previous
 pass over it had left a fix half-applied, a comment claiming the fix was

@@ -194,9 +194,21 @@ def load_data(path=None) -> pd.DataFrame:
     `path` may be a directory of shards or a single CSV. With nothing given
     it prefers the shard directory and falls back to the original
     dataset.csv, so a checkout without `data/` still trains.
+
+    The fallback is for the default only. A `path` that is named and holds
+    no corpus is an error: `--data typo.csv` used to find no shards there,
+    fall through to dataset.csv, and train and save a model on 81 messages
+    the caller never asked for, with nothing printed to say so.
     """
     if path and os.path.isfile(path):
         frames = [pd.read_csv(path)]
+    elif path:
+        shards = data_files(path)
+        if not shards:
+            raise FileNotFoundError(
+                "no corpus at %s: not a CSV file or a directory of CSV shards"
+                % path)
+        frames = [pd.read_csv(shard) for shard in shards]
     else:
         shards = data_files(path)
         if shards:
@@ -271,18 +283,34 @@ def choose_threshold(scores, y, floor=PRECISION_FLOOR):
     reached at any cut -- a corpus the model simply cannot separate that
     cleanly -- it falls back to the best F1 outright rather than returning a
     filter that flags nothing, and the caller can see the precision it got.
+
+    Counted, not scored. This called sklearn's precision, recall and F1 once
+    each per candidate cut -- about 400 cuts, three validated metric calls
+    each -- which was 5 of the 5 seconds a comparison spent per model, and
+    so most of every training run and of the test suite. The counts come
+    from two sorted arrays instead, and each ratio is the one sklearn
+    computes (tp / flagged, tp / positives, 2tp / (positives + flagged)),
+    so the cut chosen is the same.
     """
     y = np.asarray(y)
+    scores = np.asarray(scores, dtype=float)
     best = None
     fallback = None
 
-    for cut in np.unique(scores):
-        flagged = (scores >= cut).astype(int)
-        if flagged.sum() == 0:
+    # NaN is never >= a cut, so it is never flagged: leave it out of the counts.
+    ranked = np.sort(scores[~np.isnan(scores)])
+    ranked_spam = np.sort(scores[(y == 1) & ~np.isnan(scores)])
+    positives = int((y == 1).sum())
+    cuts = np.unique(scores)
+    flagged_at = len(ranked) - np.searchsorted(ranked, cuts, side="left")
+    caught_at = len(ranked_spam) - np.searchsorted(ranked_spam, cuts, side="left")
+
+    for cut, flagged, caught in zip(cuts, flagged_at, caught_at):
+        if np.isnan(cut) or flagged == 0:
             continue
-        precision = precision_score(y, flagged, zero_division=0)
-        recall = recall_score(y, flagged, zero_division=0)
-        f1 = f1_score(y, flagged, zero_division=0)
+        precision = float(caught / flagged)
+        recall = float(caught / positives) if positives else 0.0
+        f1 = float(2 * caught / (positives + flagged))
 
         if fallback is None or f1 > fallback[3]:
             fallback = (float(cut), precision, recall, f1)

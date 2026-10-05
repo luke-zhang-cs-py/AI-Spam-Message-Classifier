@@ -126,7 +126,7 @@ never the number it compares against. There's a pass for that now.
 pytest -q
 ```
 
-153 tests, 100% of 538 statements — and those figures are checked against the
+158 tests, 100% of 571 statements — and those figures are checked against the
 repo, because a number typed into a file goes stale the moment a test is added.
 
 ## License

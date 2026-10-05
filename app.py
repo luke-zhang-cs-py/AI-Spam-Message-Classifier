@@ -25,6 +25,7 @@ in to test are exactly the kind of thing you would rather not expose.
 """
 
 import threading
+from urllib.parse import urlsplit
 
 import numpy as np
 from flask import Flask, jsonify, render_template, request
@@ -47,6 +48,45 @@ MAX_BATCH = 200
 # for a \uXXXX escape), and Flask answers 413 above it.
 MAX_BODY_BYTES = 6 * MAX_BATCH * MAX_MESSAGE_CHARS + 64 * 1024
 app.config["MAX_CONTENT_LENGTH"] = MAX_BODY_BYTES
+
+# Binding to 127.0.0.1 keeps the network out, but not a web page open in the
+# same browser (notes/CODE_AUDIT.md, 2026-10-05):
+#
+# * Cross-site POST. get_json(force=True) reads a text/plain body, which any
+#   site can send without a preflight -- so any page could press Retrain in
+#   a loop, pinning a core and overwriting the saved model each time.
+# * DNS rebinding. A hostile name that re-resolves to 127.0.0.1 is
+#   same-origin with this server and can read every reply. The Host header
+#   still carries the hostile name.
+LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
+STATE_CHANGING = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def _hostname(host):
+    """'127.0.0.1:5002' -> '127.0.0.1', '[::1]:5002' -> '[::1]'."""
+    host = (host or "").strip().lower()
+    if host.startswith("["):
+        return host.split("]", 1)[0] + "]"
+    return host.split(":", 1)[0]
+
+
+def _cross_site():
+    if request.headers.get("Sec-Fetch-Site", "").lower() == "cross-site":
+        return True
+    origin = request.headers.get("Origin")
+    if origin is None:
+        return False            # curl, the test client, scripts
+    return origin == "null" or _hostname(urlsplit(origin).netloc) not in LOOPBACK_HOSTS
+
+
+@app.before_request
+def same_machine_only():
+    if _hostname(request.host) not in LOOPBACK_HOSTS:
+        return jsonify({"ok": False, "error": "This server only answers to "
+                        "127.0.0.1 or localhost."}), 403
+    if request.method in STATE_CHANGING and _cross_site():
+        return jsonify({"ok": False, "error": "Cross-site requests are refused."}), 403
+    return None
 
 _state = {"model": None, "vectorizer": None, "name": None,
           "metrics": None, "datasetSize": None}
