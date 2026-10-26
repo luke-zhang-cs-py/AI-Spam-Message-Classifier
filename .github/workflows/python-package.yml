@@ -44,4 +44,11 @@ jobs:
         # that assumes a model already exists passes only on a machine where
         # an earlier run left one behind -- which is how
         # test_artifacts_are_found_from_any_directory used to behave.
-        run: pytest -q
+        #
+        # Coverage is enforced, not just reported: 100% of lines and branches
+        # over every module in the repository (`--cov=.` also counts a file
+        # no test imports, at 0%), tools/ included. .coveragerc omits only
+        # tests/ and excludes only the `__main__` lines. pytest-cov and
+        # coverage come from requirements.txt; Playwright, torch and the
+        # encoder weights are not installed here and the tests replace them.
+        run: pytest -q --cov=. --cov-branch --cov-report=term-missing --cov-fail-under=100

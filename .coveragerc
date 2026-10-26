@@ -1,29 +1,35 @@
 [run]
+# Branches as well as lines: a line can run on every test while one side of
+# the `if` on it never does, and line coverage alone calls that 100%.
+branch = True
+
+# The tests only. Without this the test files counted as covered source and
+# padded the total: 79% reported against 68% of the actual modules. Every
+# other project in this family omits them, and a coverage figure that
+# includes its own tests is measuring the wrong thing.
+#
+# tools/ used to be omitted as well, as developer scripts run by hand. That
+# left three files -- the build that publishes docs/app, the script that
+# rewrites the published figures, and the backend comparison -- holding nearly
+# as many statements as the rest of the project together, tested by nothing.
+# They are measured now, with the browser, the subprocesses and the encoder
+# replaced by stand-ins in tests/test_tools_*.py.
 omit =
     tests/*
-    # Developer scripts, not shipped code. tools/refresh_figures.py keeps the
-    # published figures true; tools/compare_backends.py measures whether the
-    # optional embedding backend is worth installing. Both are run by hand,
-    # and compare_backends needs the extras the default install omits.
-    tools/*
-
-# Without this the test files counted as covered source and padded the total:
-# 79% reported against 68% of the actual modules. Every other project in this
-# family omits them, and a coverage figure that includes its own tests is
-# measuring the wrong thing.
 
 [report]
-exclude_lines =
-    # Re-listed, because setting exclude_lines replaces the default list
-    # rather than adding to it -- and two modules here already carry the
-    # pragma, which would silently stop working.
-    pragma: no cover
-    # The script entry points: `sys.exit(main())`, and in app.py a print and
-    # an `app.run()`. Importing a module under test must not start a server,
-    # so the block cannot execute in the suite by construction. Excluded
-    # here rather than pragma'd file by file, which is what the other Flask
-    # projects in this family do. What the block *calls* is covered
-    # directly, in tests/test_cli_entry_points.py; it is the two or three
-    # lines of process startup around it that are not.
+# 100% of lines and branches is required, by --cov-fail-under=100 in CI
+# rather than fail_under here, so a run of one test file under --cov still
+# reports instead of failing.
+show_missing = True
+
+# The one exclusion: the process entry points. Importing a module under test
+# must not start a server or exit the interpreter, so the block cannot run in
+# the suite by construction. Each block is a single call to a main() that is
+# tested directly -- app.main(), classify.main() and the rest -- so what is
+# excluded is that one line of process startup and nothing else.
+#
+# exclude_also rather than exclude_lines, which replaces the default list
+# instead of adding to it.
+exclude_also =
     if __name__ == .__main__.:
-    raise NotImplementedError

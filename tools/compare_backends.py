@@ -21,7 +21,9 @@ strength of its threshold.
 A constant with a round number and no measurement behind it is a magic
 number, and this is the file that stops it being one.
 
-Not shipped code: this is in tools/, which .coveragerc omits.
+Not shipped code, but measured: tests/test_tools_compare_backends.py runs it
+with a stand-in encoder, since neither torch nor the weights are installed in
+CI.
 """
 import argparse
 import os

@@ -461,9 +461,19 @@ def api_retrain():
                         "metrics": _state["metrics"]})
 
 
-if __name__ == "__main__":
+def main():
+    """`python app.py`: load or train the model, then serve on loopback.
+
+    A function rather than the body of the `__main__` block, so a test can
+    run it with `app.run` replaced and check what it prints and where it
+    binds. The block below is then the one line `.coveragerc` excludes.
+    """
     ensure_model()
     with _lock:
         print(f"Model ready: {_state['name']}")
     print("Open http://127.0.0.1:5002")
     app.run(host="127.0.0.1", port=5002, threaded=True, use_reloader=False)
+
+
+if __name__ == "__main__":
+    main()

@@ -47,8 +47,8 @@ def measure():
     """Run the suite under coverage and read the JSON report.
 
     The report rather than a static analysis: it is the same set of files the
-    terminal report prints, so the omitted build tools stay omitted and the
-    network/ package is not missed — both of which a walk of the root got
+    terminal report prints, so whatever .coveragerc omits stays omitted and
+    nothing it measures is missed — both of which a walk of the root got
     wrong.
     """
     handle, path = tempfile.mkstemp(suffix=".json")

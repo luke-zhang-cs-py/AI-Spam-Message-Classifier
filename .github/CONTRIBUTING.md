@@ -29,9 +29,15 @@ git clone . /tmp/fresh && cd /tmp/fresh && pytest -q   # what CI sees
 ## Tests
 
 ```bash
-pytest -q
+pytest -q --cov=. --cov-branch --cov-report=term-missing --cov-fail-under=100
 python -m flake8 . --select=E9,F63,F7,F82
 ```
+
+Coverage is 100% of lines and branches over every module, `tools/` included,
+and CI fails below that. The one exclusion is the `if __name__ ==
+"__main__":` line, which only calls a `main()` that is tested directly; there
+is no `# pragma: no cover` anywhere, and a new one should not be the way a
+line gets past the gate.
 
 The model is trained once per session rather than per test, so the
 suite runs in seconds instead of minutes.
@@ -57,9 +63,11 @@ than as a published page that quietly says something different from the
 repository. That check needs a browser (`pip install playwright && python -m
 playwright install chromium`); `pytest` does not.
 
-`tools/*` is omitted from coverage, so none of this moves the published
-figures. If you change a root module, run `python tools/refresh_figures.py`
-instead of editing numbers into `docs/index.html` by hand.
+`tools/*` is measured like everything else, with the browser replaced by a
+stand-in in `tests/test_tools_build_static.py`, so a change there moves the
+published figures too. Whatever you change, run `python
+tools/refresh_figures.py` instead of editing numbers into `docs/index.html`
+by hand.
 
 ## Conventions
 

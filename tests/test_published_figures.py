@@ -53,10 +53,12 @@ sys.path.insert(0, ROOT)
 
 PAGE = os.path.join(ROOT, "docs", "index.html")
 
-# Directories that hold no shipped module. tests/ is excluded from coverage by
-# the config too; the rest are never source.
+# Directories that hold no measured module. tests/ is excluded from coverage
+# by the config too; the rest are never source. tools/ is not here: it was,
+# while .coveragerc omitted it, and both changed together when the build and
+# figure scripts got tests of their own.
 SKIP_DIRS = {".git", "__pycache__", "tests", "htmlcov", ".venv", "venv",
-             "node_modules", "docs", "tools", "data", "static", "templates"}
+             "node_modules", "docs", "data", "static", "templates"}
 
 # The page's own history: counts that describe what a figure *used to* say.
 # These are the only numbers on the page allowed to be wrong, because being
@@ -139,7 +141,7 @@ def has_coverage_data():
     try:
         cov.load()
         return bool(cov.get_data().measured_files())
-    except Exception:                                  # pragma: no cover
+    except Exception:
         return False
 
 

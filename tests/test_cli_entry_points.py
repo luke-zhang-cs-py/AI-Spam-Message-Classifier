@@ -347,3 +347,35 @@ def test_the_source_of_both_mains_is_reachable_without_a_subprocess():
     assert "argv" in inspect.signature(classify_cli.main).parameters
     for function in (classify_cli.run_interactive, allinone.run_interactive):
         assert "read" in inspect.signature(function).parameters, function
+
+
+# ------------------------------------------------------------------- app.py
+
+def test_the_web_apps_main_loads_the_model_then_serves_on_loopback_only(
+        artifacts, monkeypatch, capsys):
+    """`python app.py` used to be five lines inside the `__main__` block,
+    so nothing measured them: which model it announced, and -- the part that
+    matters -- which interface it bound. The module docstring promises
+    127.0.0.1, because nothing here is authenticated. `app.run` is replaced,
+    so the test sees the call without a server starting."""
+    import app as web
+
+    trainer.main(["--quiet"])
+    model, _ = trainer.load_artifacts()
+    served = []
+    monkeypatch.setattr(web.app, "run", lambda **options: served.append(options))
+
+    web.reset()                  # another test may have cached its own model
+    capsys.readouterr()
+    try:
+        web.main()
+    finally:
+        web.reset()
+
+    assert served == [{"host": "127.0.0.1", "port": 5002, "threaded": True,
+                       "use_reloader": False}], (
+        "it should bind loopback only, once, without the reloader")
+    printed = capsys.readouterr().out
+    assert "Model ready: %s" % web.model_display_name(model) in printed, (
+        "it announced a different model from the one on disk")
+    assert "http://127.0.0.1:5002" in printed
