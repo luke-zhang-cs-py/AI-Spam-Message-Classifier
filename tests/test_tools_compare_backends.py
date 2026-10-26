@@ -16,6 +16,7 @@ classifiers have something to separate.
 import os
 import re
 import sys
+import types
 
 import numpy as np
 import pytest
@@ -58,9 +59,12 @@ def small_corpus(monkeypatch):
                         lambda model_dir=None: None)
     monkeypatch.setattr(embeddings, "load_encoder",
                         lambda model_dir=None: KeywordEncoder())
-    # Two readings of the clock, sixty-three seconds apart.
+    # Two readings of the clock, sixty-three seconds apart. The tool gets a
+    # clock of its own: patching time.time itself would hand these two ticks
+    # to joblib inside scikit-learn as well, which reads the clock too.
     ticks = iter([1000.0, 1063.0])
-    monkeypatch.setattr(compare.time, "time", lambda: next(ticks))
+    monkeypatch.setattr(compare, "time",
+                        types.SimpleNamespace(time=lambda: next(ticks)))
     return frame
 
 
