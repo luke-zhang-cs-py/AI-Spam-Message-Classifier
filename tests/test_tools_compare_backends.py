@@ -17,10 +17,12 @@ import os
 import re
 import sys
 import types
+import warnings
 
 import numpy as np
 import pytest
 from scipy.sparse import issparse
+from sklearn.base import clone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -119,6 +121,36 @@ def test_the_fold_features_are_refitted_with_either_half_or_both(
             "the combined features are not the two halves side by side")
 
 
+def test_the_rbf_row_is_platt_scaled_without_the_deprecated_flag(
+        small_corpus):
+    """The row was `SVC(probability=True)`, deprecated in scikit-learn 1.9
+    and gone in 1.11. What replaces it has to keep what the row relied on:
+    one RBF SVM at EMBEDDING_C, and probabilities that rank the held-out
+    messages exactly as that SVM's decision function does, since the
+    threshold is chosen on that ranking."""
+    y = small_corpus["label"].map(spamlib.LABELS).to_numpy()
+    train, _, X_train, X_test = compare.features(
+        small_corpus, y, lexical=False, semantic=True)[0]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", FutureWarning)
+        fitted = clone(compare.rbf_svm(spamlib.EMBEDDING_C)).fit(
+            X_train, y[train])
+
+    assert len(fitted.calibrated_classifiers_) == 1, (
+        "one SVM on every training row, as libsvm fitted, not an ensemble")
+    svm = fitted.calibrated_classifiers_[0].estimator
+    assert svm.kernel == "rbf" and svm.C == spamlib.EMBEDDING_C
+    assert svm.probability is not True, "the deprecated flag is back"
+    spam = fitted.predict_proba(X_test)[:, 1]
+    assert ((spam >= 0.0) & (spam <= 1.0)).all()
+    ranked = spam[np.argsort(svm.decision_function(X_test), kind="stable")]
+    assert (np.diff(ranked) >= 0).all(), (
+        "the probabilities reorder what the SVM's decision function ranks")
+
+
+# The deprecated flag warns on every fit, so this fails while any row of the
+# table still builds an SVC with it.
+@pytest.mark.filterwarnings("error:The `probability` parameter:FutureWarning")
 def test_the_comparison_prints_every_row_and_picks_the_best(small_corpus,
                                                             capsys):
     assert compare.main([]) == 0

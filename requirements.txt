@@ -12,5 +12,7 @@ pytest>=7.4
 # tests/test_published_figures.py measures the published figures with, so
 # without it that test errors rather than skips -- and CI installs exactly
 # this file. pytest-cov is what the documented coverage command asks for.
-coverage>=7.0
+# 7.5.2 for .coveragerc's empty partial_branches, which older versions read
+# as "every branch is partial", hiding every branch taken only one way.
+coverage>=7.5.2
 pytest-cov>=4.0

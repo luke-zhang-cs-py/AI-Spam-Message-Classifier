@@ -49,12 +49,14 @@ def measure():
     The report rather than a static analysis: it is the same set of files the
     terminal report prints, so whatever .coveragerc omits stays omitted and
     nothing it measures is missed — both of which a walk of the root got
-    wrong.
+    wrong. `--cov=.` as CI has it, not a bare `--cov`: that one reports only
+    the files the suite imported, so a module no test touches would be left
+    off the page instead of shown at 0%.
     """
     handle, path = tempfile.mkstemp(suffix=".json")
     os.close(handle)
     subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", "--cov",
+        [sys.executable, "-m", "pytest", "-q", "--cov=.",
          "--cov-report=json:" + path, "-p", "no:cacheprovider"],
         cwd=ROOT, capture_output=True, text=True, timeout=1800)
     report = json.loads(read(path))

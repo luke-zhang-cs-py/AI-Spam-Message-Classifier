@@ -43,7 +43,26 @@ from pipeline import spamlib                        # noqa: E402
 # dense, so this is the one estimator in the file that the library itself
 # never constructs -- kept because the row it produces is the honest half of
 # the comparison and the one that makes the backend look bad.
-from sklearn.svm import SVC           # noqa: E402
+from sklearn.calibration import CalibratedClassifierCV   # noqa: E402
+from sklearn.svm import SVC                               # noqa: E402
+
+
+def rbf_svm(C):
+    """An RBF SVM with Platt-scaled probabilities, which the threshold sweep
+    needs and a bare SVC does not give.
+
+    This was `SVC(probability=True)`, deprecated in scikit-learn 1.9 and
+    removed in 1.11, where it raises -- and requirements.txt sets no upper
+    bound. The replacement is the one scikit-learn names: one SVC fitted on
+    every training row, with a sigmoid fitted by 5-fold cross-validation over
+    its decision values, as libsvm did internally. The probabilities are a
+    rising function of one decision function either way, so the ranking a
+    fold's threshold is chosen on is the SVM's own; the calibration folds are
+    stratified rather than libsvm's shuffled ones, so the third decimal of the
+    row may move.
+    """
+    return CalibratedClassifierCV(SVC(kernel="rbf", C=C), method="sigmoid",
+                                  ensemble=False)
 
 
 def scored(estimator, folds, y):
@@ -88,9 +107,7 @@ def compare(df, y):
     rows.append(row("embeddings", "LogReg",
                     LogisticRegression(max_iter=spamlib.MAX_ITER, C=C),
                     dense, y))
-    rows.append(row("embeddings", "RBF SVM",
-                    SVC(kernel="rbf", C=C, probability=True,
-                        random_state=spamlib.RANDOM_STATE), dense, y))
+    rows.append(row("embeddings", "RBF SVM", rbf_svm(C), dense, y))
 
     both = features(df, y, lexical=True, semantic=True)
     for name, estimator in spamlib.candidate_models(embeddings=True).items():

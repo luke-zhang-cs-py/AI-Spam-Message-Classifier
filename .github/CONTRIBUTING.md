@@ -35,9 +35,12 @@ python -m flake8 . --select=E9,F63,F7,F82
 
 Coverage is 100% of lines and branches over every module, `tools/` included,
 and CI fails below that. The one exclusion is the `if __name__ ==
-"__main__":` line, which only calls a `main()` that is tested directly; there
-is no `# pragma: no cover` anywhere, and a new one should not be the way a
-line gets past the gate.
+"__main__":` line, which only calls a `main()` that is tested directly. There
+is no `# pragma: no cover` anywhere, and one would not work: `.coveragerc`
+replaces coverage's default exclusions rather than adding to it, so pragmas,
+`...` bodies and `if TYPE_CHECKING:` blocks all count. A new script in
+`tools/` shows at 0% until it has tests, because `tools/__init__.py` makes it
+part of what `--cov=.` reports.
 
 The model is trained once per session rather than per test, so the
 suite runs in seconds instead of minutes.

@@ -87,7 +87,8 @@ def test_measure_reads_the_json_report_the_coverage_run_writes(tmp_path,
         "tools/build.py": {"lines": 1, "stmts": 1, "missed": 0},
     }
     assert seen["args"][:4] == [sys.executable, "-m", "pytest", "-q"]
-    assert "--cov" in seen["args"]
+    assert "--cov=." in seen["args"], (
+        "a bare --cov leaves out every module the suite does not import")
     assert seen["options"]["cwd"] == str(tmp_path)
     assert not os.path.exists(seen["report"]), "the temporary report was left behind"
 

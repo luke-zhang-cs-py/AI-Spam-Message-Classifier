@@ -126,7 +126,7 @@ never the number it compares against. There's a pass for that now.
 pytest -q --cov=. --cov-branch --cov-fail-under=100   # what CI runs
 ```
 
-229 tests, 100% of 1,110 statements — and those figures are checked against the
+230 tests, 100% of 1,113 statements — and those figures are checked against the
 repo, because a number typed into a file goes stale the moment a test is added.
 
 ## License

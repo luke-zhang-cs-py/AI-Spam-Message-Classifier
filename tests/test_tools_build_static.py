@@ -312,7 +312,8 @@ def test_differences_names_the_path_to_every_disagreement():
     found = build.differences(want, got)
     assert found[0] == ".b[1]: python 2, browser 3"
     assert found[1] == ".c.d: python True, browser 1", (
-        "true and 1 are the same in Python and must not be here")
+        "True == 1 in Python, but JSON true and 1 differ, so this is a "
+        "disagreement")
     assert found[2] == ".only_js: only the browser has it (0)"
     assert found[3] == ".only_py: only python has it (0)"
     assert found[4].startswith(".short: python has 3 entries, browser has 1")
@@ -825,31 +826,21 @@ def _published(tmp_path, monkeypatch, fitted, argv):
     monkeypatch.setattr(build, "OUT", str(out))
     monkeypatch.setattr(build, "CHROME", str(tmp_path / "no-chrome.exe"))
 
-    browsers = []
+    # The browser answers with whatever the real Python reference turns out
+    # to be, which the build computes before it launches one.
+    browser = FaithfulPort(reference=None)
     real_reference = build.python_reference
 
     def reference(messages, model, vectorizer):
-        found = real_reference(messages, model, vectorizer)
-        browsers.append(FaithfulPort(found))
-        return found
+        browser.reference = real_reference(messages, model, vectorizer)
+        return browser.reference
 
     monkeypatch.setattr(build, "python_reference", reference)
-
-    @contextlib.contextmanager
-    def sync_playwright():
-        class Chromium:
-            def launch(self, **options):
-                assert options == {}
-                return browsers[0]
-        yield types.SimpleNamespace(chromium=Chromium())
-
-    api = types.ModuleType("playwright.sync_api")
-    api.sync_playwright = sync_playwright
-    monkeypatch.setitem(sys.modules, "playwright", types.ModuleType("playwright"))
-    monkeypatch.setitem(sys.modules, "playwright.sync_api", api)
+    launches = install_playwright(monkeypatch, browser)
 
     build.main(argv)
-    return out, browsers[0]
+    assert launches == [{}], "Playwright's own Chromium, launched once"
+    return out, browser
 
 
 def test_the_build_checks_the_port_then_writes_docs_app(

@@ -14,6 +14,9 @@ branch = True
 # as many statements as the rest of the project together, tested by nothing.
 # They are measured now, with the browser, the subprocesses and the encoder
 # replaced by stand-ins in tests/test_tools_*.py.
+#
+# tools/__init__.py is what makes that hold for a script no test imports
+# yet: coverage reports an unimported file at 0% only inside a package.
 omit =
     tests/*
 
@@ -29,7 +32,16 @@ show_missing = True
 # tested directly -- app.main(), classify.main() and the rest -- so what is
 # excluded is that one line of process startup and nothing else.
 #
-# exclude_also rather than exclude_lines, which replaces the default list
-# instead of adding to it.
-exclude_also =
+# exclude_lines, which replaces coverage's default list, and not
+# exclude_also, which adds to it. The defaults are `# pragma: no cover`, `...`
+# stub bodies and `if TYPE_CHECKING:` blocks, so under exclude_also any of
+# them would still take lines out of the 100% without anyone reading this
+# file. Here a pragma is just a comment.
+exclude_lines =
     if __name__ == .__main__.:
+
+# Empty, for the same reason: the default is `# pragma: no branch`, which
+# would still let one side of an `if` go untested. An empty list needs
+# coverage 7.5.2 or later -- before that it marked every branch partial and
+# hid them all -- which is why requirements.txt asks for it.
+partial_branches =

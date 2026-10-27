@@ -387,14 +387,15 @@ var MODULES = [
   { name: 'tools/build_static.py',         lines: 1093, stmts: 327, missed:  0, does: 'builds docs/app, and refuses to if the JavaScript port disagrees with the Python' },
   { name: 'pipeline/spamlib.py',           lines: 647, stmts: 217, missed:  0, does: 'the one implementation: normalising, model choice, the tuned threshold' },
   { name: 'app.py',                        lines: 479, stmts: 153, missed:  0, does: 'the web UI, five endpoints, and the per-word explanation' },
-  { name: 'tools/refresh_figures.py',      lines: 233, stmts: 124, missed:  0, does: 'measures the figures on this page and rewrites them' },
-  { name: 'tools/compare_backends.py',     lines: 166, stmts:  82, missed:  0, does: 'scores tf-idf against the optional embeddings under one shared split' },
+  { name: 'tools/refresh_figures.py',      lines: 235, stmts: 124, missed:  0, does: 'measures the figures on this page and rewrites them' },
+  { name: 'tools/compare_backends.py',     lines: 183, stmts:  85, missed:  0, does: 'scores tf-idf against the optional embeddings under one shared split' },
   { name: 'pipeline/embeddings.py',        lines: 293, stmts:  80, missed:  0, does: 'the optional transformer backend, off by default and measured' },
   { name: 'spam_classifier_all_in_one.py', lines: 197, stmts:  64, missed:  0, does: 'the end-to-end demo and CLI; the pipeline itself moved to spamlib' },
   { name: 'cli/train_spam_classifier.py',  lines: 111, stmts:  34, missed:  0, does: 'trains both models, compares them, saves the winner' },
   { name: 'cli/classify.py',               lines: 104, stmts:  29, missed:  0, does: 'one message from the command line, or an interactive loop' },
   { name: 'cli/__init__.py',               lines:   7, stmts:   0, missed:  0, does: 'the package: train it, then ask it about a message' },
-  { name: 'pipeline/__init__.py',          lines:   6, stmts:   0, missed:  0, does: 'the package: the filter, and its one optional backend' }
+  { name: 'pipeline/__init__.py',          lines:   6, stmts:   0, missed:  0, does: 'the package: the filter, and its one optional backend' },
+  { name: 'tools/__init__.py',             lines:   7, stmts:   0, missed:  0, does: 'not imported; there so coverage shows an untested script here at 0%' }
 ];
 
 var TESTS = [
@@ -406,10 +407,10 @@ var TESTS = [
   { file: 'test_tools_refresh_figures.py',  n: 17, of: 'the script that rewrites this page, with both of its runs replaced' },
   { file: 'test_degraded_paths.py',         n: 15, of: 'the fallback corpus, an unreachable floor, a model with no weights' },
   { file: 'test_published_figures.py',      n: 11, of: 'the numbers on this page, against a fresh measurement' },
-  { file: 'test_tools_compare_backends.py', n:  4, of: 'the backend comparison, with a stand-in encoder and a smaller corpus' }
+  { file: 'test_tools_compare_backends.py', n:  5, of: 'the backend comparison, with a stand-in encoder and a smaller corpus' }
 ];
 
-var TEST_LINES = 4128;
+var TEST_LINES = 4156;
 
 /* Which interpreter produced the statement counts above. It matters: coverage
  * counts a `with` block or a multi-line call differently between versions, so
