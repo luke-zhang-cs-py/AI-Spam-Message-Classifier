@@ -69,7 +69,8 @@
   --color-text-primary:#1f2328;
   --color-text-muted:#59636e;
   --color-text-subtle:#66707b;
-  --color-accent:#0969da;
+  --color-accent:#075fc6;                /* 4.5:1 on the hover tint too: the text changes
+                                           at once while the tint fades in and out */
   --color-accent-hover:#0550ae;
   --color-accent-subtle:#ddf4ff;
   --color-accent-subtle-hover:#c8e9ff;
