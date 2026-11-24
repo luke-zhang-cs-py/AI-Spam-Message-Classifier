@@ -428,6 +428,7 @@ var TESTS = [
   { file: 'test_tools_build_static.py',     n: 49, of: 'the docs/app build: its refusals, its four passes and --prove, with a stand-in browser' },
   { file: 'test_app.py',                    n: 47, of: 'the five endpoints, the caps, and the vanishing metrics' },
   { file: 'test_embeddings.py',             n: 39, of: 'the optional backend, almost all of it without torch installed' },
+  { file: 'test_theming.py',                n: 28, of: 'the colour themes: complete blocks, every pair at WCAG AA, dark without JavaScript, the toggle' },
   { file: 'test_duplication_and_cli.py',    n: 24, of: 'that the three entry points share one recipe' },
   { file: 'test_cli_entry_points.py',       n: 23, of: 'both command lines driven in process, where coverage can see them' },
   { file: 'test_tools_refresh_figures.py',  n: 17, of: 'the script that rewrites this page, with both of its runs replaced' },
@@ -436,7 +437,7 @@ var TESTS = [
   { file: 'test_tools_compare_backends.py', n:  5, of: 'the backend comparison, with a stand-in encoder and a smaller corpus' }
 ];
 
-var TEST_LINES = 4156;
+var TEST_LINES = 4539;
 
 /* Which interpreter produced the statement counts above. It matters: coverage
  * counts a `with` block or a multi-line call differently between versions, so
