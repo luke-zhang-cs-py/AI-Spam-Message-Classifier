@@ -1,9 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="theme-dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Spam Classifier — browser build</title>
+<script>
+  /* Restores a theme picked on an earlier visit, ahead of first paint so it
+     never flashes. Not needed to theme the page: class="theme-dark" above does
+     that with or without JavaScript. The key is 'theme', shared by every page
+     on luke-zhang-cs-py.github.io, so one choice carries across the site. */
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem('theme'); } catch (e) { /* storage blocked */ }
+    if (/^[a-z]+$/.test(saved)) document.documentElement.classList.replace('theme-dark', 'theme-' + saved);
+  })();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
@@ -13,9 +24,12 @@
 <div class="wrap">
 
   <header>
-    <h1>Spam Classifier<em>browser build — exported TF-IDF model</em></h1>
-    <div class="sub">Paste a message to see whether the model calls it spam &mdash; and
-      which words drove that call. Runs entirely on this machine; nothing is sent anywhere.</div>
+    <div class="headtext">
+      <h1>Spam Classifier<em>browser build — exported TF-IDF model</em></h1>
+      <div class="sub">Paste a message to see whether the model calls it spam &mdash; and
+        which words drove that call. Runs entirely on this machine; nothing is sent anywhere.</div>
+    </div>
+    <button class="secondary" id="themeBtn" type="button" aria-label="Switch to light theme">Theme</button>
   </header>
 
   <!-- Added by tools/build_static.py. The Flask app does not have this

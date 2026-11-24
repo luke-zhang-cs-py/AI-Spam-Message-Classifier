@@ -134,6 +134,34 @@ async function loadModel() {
   } catch (_) { /* page still usable */ }
 }
 
+/* -------------------------------------------------------------- theme */
+
+/* THEMES in order. Each name needs a matching .theme-<name> block in
+ * static/css/style.css, and the first is the one written into the markup, so
+ * the page is dark before (and without) this script. A theme restored from
+ * storage by the snippet in <head> that no longer exists falls back to it. */
+const THEMES = ['dark', 'light'];
+const htmlRoot = document.documentElement;
+let theme = THEMES.find((t) => htmlRoot.classList.contains('theme-' + t)) || THEMES[0];
+const nextTheme = () => THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+
+function applyTheme(name) {
+  htmlRoot.className = (htmlRoot.className.replace(/(^|\s)theme-\S+/g, '') +
+    ' theme-' + name).trim();
+  theme = name;
+  $('themeBtn').setAttribute('aria-label', `Switch to ${nextTheme()} theme`);
+  // The browser's toolbar colour follows the page, where a page sets one.
+  const bg = getComputedStyle(htmlRoot).getPropertyValue('--color-bg').trim();
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => { m.content = bg; });
+}
+
+applyTheme(theme);
+$('themeBtn').onclick = () => {
+  const next = nextTheme();
+  try { localStorage.setItem('theme', next); } catch (_) { /* not remembered */ }
+  applyTheme(next);
+};
+
 /* ------------------------------------------------------------- wiring */
 
 $('classifyBtn').onclick = classify;

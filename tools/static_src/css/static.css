@@ -13,12 +13,16 @@
    it is written down.
    --------------------------------------------------------------------------- */
 
-  .staticBanner{margin:0 0 20px;padding:12px 15px 13px;border-radius:10px;
-    background:var(--panel);border:1px solid var(--hair);
-    border-left:3px solid var(--accent);
-    color:var(--muted);font-size:12px;line-height:1.7;max-width:820px;}
-  .staticBanner b{color:var(--ink);font-weight:600;}
-  .staticBanner code{font-family:'IBM Plex Mono',monospace;font-size:11px;
-    color:var(--ink);background:#0b0f15;border-radius:4px;padding:1px 5px;}
-  .staticBanner a{color:var(--accent);text-decoration:none;}
+  /* Reads the tokens in static/css/style.css, which is loaded first. */
+  .staticBanner{margin:0 0 var(--space-5);padding:var(--space-3) var(--space-4);
+    border-radius:var(--radius-2xl);
+    background:var(--color-surface);border:1px solid var(--color-border);
+    border-left:3px solid var(--color-accent);
+    color:var(--color-text-muted);font-size:var(--text-sm);line-height:var(--leading-loose);
+    max-width:820px;}
+  .staticBanner b{color:var(--color-text-primary);font-weight:var(--weight-semibold);}
+  .staticBanner code{font-family:var(--font-mono);font-size:var(--text-2xs);
+    color:var(--color-text-primary);background:var(--color-surface-subtle);
+    border-radius:var(--radius-sm);padding:1px var(--space-1);}
+  .staticBanner a{color:var(--color-accent);text-decoration:none;}
   .staticBanner a:hover{text-decoration:underline;}
