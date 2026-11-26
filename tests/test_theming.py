@@ -21,7 +21,9 @@ What can break, and what each test here is for:
   * the toggle not switching, not remembering, or adopting a saved theme
     that no longer exists (test 4);
   * text the token matrix does not know about, read off the rendered page
-    in every state it has, in both themes (test 5).
+    in every state it has, in both themes (test 5);
+  * a banned or remote font creeping back into a stack or a <link>, or the
+    self-hosted faces failing to load (tests 3 and 5).
 
 The pure-Python tests run everywhere, CI included. The browser tests need
 Playwright and a Chromium, which CI does not install, so they skip there with
@@ -55,24 +57,28 @@ CONTRACT = {
 # without the --color- prefix. Text at 4.5:1, control boundaries and marks
 # that carry meaning at 3:1.
 APP_TEXT = [
-    ("text-primary", "bg"), ("text-primary", "surface"), ("text-primary", "surface-subtle"),
+    ("text-primary", "bg"), ("text-primary", "surface"),
+    ("text-primary", "surface-subtle"),             # code in the build banner
     ("text-primary", "accent-subtle-hover"),        # a secondary button, hovered
     ("text-muted", "bg"),                           # the header line, the footer
     ("text-muted", "surface"),                      # labels, notes, samples
     ("text-muted", "border"),                       # the badge before a verdict
-    ("text-subtle", "surface-subtle"),              # the placeholder
+    ("text-subtle", "surface"),                     # the placeholder, on the field's surface fill
+    ("text-subtle", "surface-subtle"),              # ...and on an inset, should it move back
     ("accent", "surface"),                          # a hovered sample, the banner link
-    ("accent", "accent-subtle"),                    # the Classify button
-    ("accent-hover", "accent-subtle-hover"),        # ...hovered
-    ("accent", "accent-subtle-hover"),              # ...as the hover tint fades out: the text
-                                                    # colour snaps back, the background eases
-    ("text-on-accent", "accent"),
+    ("text-on-accent", "accent"),                   # the Classify button
+    ("text-on-accent", "accent-hover"),             # ...hovered, and all through the fade:
+                                                    # the text colour is the same at both ends
     ("danger", "surface"), ("danger", "danger-subtle"),     # spam: batch row; badge, chip, error
     ("success", "surface"), ("success", "success-subtle"),  # ham: batch row; badge, chip
 ]
 APP_UI = [
-    ("border-strong", "surface"), ("border-strong", "surface-subtle"),  # the textarea's edge
-    ("accent", "surface-subtle"),                                       # ...focused
+    # The textarea's edge and a secondary button's outline, on both sides of
+    # the line: the page or a panel outside, the field's surface fill inside.
+    ("border-strong", "bg"), ("border-strong", "surface"),
+    ("accent", "bg"), ("accent", "surface"),        # the focus ring; the focused field's edge;
+                                                    # the Classify button's face
+    ("accent", "surface-subtle"),
     ("accent", "border"), ("danger", "border"), ("success", "border"),  # confidence fill on its track
 ]
 WRITEUP_TEXT = [
@@ -84,7 +90,8 @@ WRITEUP_TEXT = [
     ("success", "surface"), ("danger", "surface"),  # status flags, always with a glyph and a word
 ]
 WRITEUP_UI = [
-    ("border-strong", "bg"), ("border-strong", "surface"),
+    ("border-strong", "bg"), ("border-strong", "surface"),  # button and link-button outlines
+    ("accent", "bg"), ("accent", "surface"),        # the focus ring, a pressed button's outline
     ("accent", "track"),                            # a bar on its rail
 ]
 
@@ -205,11 +212,39 @@ def test_the_markup_opens_dark_and_restores_a_saved_theme_before_paint(path):
                      r'aria-label="Switch to light theme"', page)
 
 
+# DESIGN.md: never these, not even as a fallback. A stack ends at the generic
+# sans-serif or monospace.
+BANNED_FONTS = re.compile(r"\bInter\b|Roboto|Open Sans|\bArial\b|system-ui|-apple-system|"
+                          r"BlinkMacSystemFont|Segoe UI|Helvetica")
+FONT_STACKS = {
+    "--font-display": '"Bricolage Grotesque",sans-serif',
+    "--font-sans": '"IBM Plex Sans",sans-serif',
+    "--font-mono": '"IBM Plex Mono",monospace',
+}
+
+
 @pytest.mark.parametrize("path", [APP_CSS, STATIC_CSS, TEMPLATE, APP_JS, WRITEUP])
-def test_the_system_colour_scheme_does_not_pick_the_theme(path):
+def test_the_system_picks_neither_the_colour_scheme_nor_the_type(path):
+    """The theme comes from the class, and the type from the self-hosted
+    faces: no system colour scheme, no system or banned font, no font server."""
     text = read(path)
     assert "prefers-color-scheme" not in text
     assert "data-theme" not in text
+    assert not BANNED_FONTS.findall(text), BANNED_FONTS.findall(text)
+    assert "fonts.googleapis.com" not in text and "fonts.gstatic.com" not in text
+    # Every family a rule names is one of the three tokens (or inherits one).
+    styles = css_of(path) if path.endswith((".css", ".html")) else ""
+    for family in re.findall(r"font-family\s*:\s*([^;}]+)", styles):
+        assert family.strip() == "inherit" or family.strip().startswith("var(--font-"), family
+    if path in (APP_CSS, WRITEUP):
+        stacks = {name: re.sub(r",\s+", ",", value.strip()) for name, value in
+                  re.findall(r"(--font-[a-z]+)\s*:\s*([^;]+);", css_of(path))}
+        assert stacks == FONT_STACKS, stacks
+    if path.endswith(".html"):
+        head = text[:text.index("</head>")]
+        fonts = re.search(r'<link rel="stylesheet" href="([^"]*fonts\.css[^"]*)">', head)
+        assert fonts, "the self-hosted fonts.css is not loaded"
+        assert head.index(fonts.group(0)) < head.index("<style>" if path == WRITEUP else "css/style.css")
 
 
 def test_the_published_demo_was_built_from_these_sources():
@@ -222,6 +257,13 @@ def test_the_published_demo_was_built_from_these_sources():
         assert built == banner % name + read(source), \
             "docs/app/%s is stale: run python tools/build_static.py" % out
     assert read(os.path.join(ROOT, "docs", "app", "css", "static.css")) == read(STATIC_CSS)
+    # The type as well: fonts.css and every face and licence beside it.
+    fonts = ["fonts.css"] + ["fonts/" + name for name in
+                             sorted(os.listdir(os.path.join(ROOT, "static", "fonts")))]
+    assert len(fonts) == 8, fonts
+    for name in fonts:
+        with open(os.path.join(ROOT, "static", *name.split("/")), "rb") as want,                 open(os.path.join(ROOT, "docs", "app", *name.split("/")), "rb") as got:
+            assert got.read() == want.read(), "docs/app/%s is stale" % name
 
 
 # ------------------------------------------------------------ the browser
@@ -373,6 +415,17 @@ def _writeup_states(tab):
     return found
 
 
+# The faces each page draws with once every state has been shown; a face
+# the browser could not fetch stays "unloaded" or turns "error".
+FACES = r"""() => document.fonts.ready.then(() =>
+  [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family.replace(/"/g, '') + ' ' + f.weight)
+    .concat(['800 48px "Bricolage Grotesque"', '400 16px "IBM Plex Sans"', '600 16px "IBM Plex Sans"',
+             '400 13px "IBM Plex Mono"', '600 13px "IBM Plex Mono"']
+            .filter(f => !document.fonts.check(f)).map(f => 'not ready: ' + f)))"""
+LOADED = ["Bricolage Grotesque 200 800", "IBM Plex Mono 400", "IBM Plex Mono 600",
+          "IBM Plex Sans 400", "IBM Plex Sans 600"]
+
+
 @pytest.mark.parametrize("seed", ["dark", "light"])
 @pytest.mark.parametrize("page", sorted(BROWSER_PAGES))
 def test_every_visible_text_meets_aa_in_every_state(open_page, page, seed):
@@ -380,4 +433,5 @@ def test_every_visible_text_meets_aa_in_every_state(open_page, page, seed):
     assert tab.evaluate(THEME) == seed
     found = _demo_states(tab) if page == "demo" else _writeup_states(tab)
     assert not found, sorted(set(found))
+    assert sorted(set(tab.evaluate(FACES))) == LOADED, "the self-hosted type did not all load"
     assert not tab.errors, tab.errors
