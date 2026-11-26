@@ -17,14 +17,21 @@
   --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:20px;
   --space-6:24px; --space-7:28px; --space-10:40px;
 
-  /* typography */
-  --font-sans:'Inter',system-ui,sans-serif;
-  --font-mono:'IBM Plex Mono',monospace;
-  --text-3xs:10.5px; --text-2xs:11px; --text-xs:11.5px; --text-sm:12px; --text-md:12.5px;
-  --text-base:13px; --text-lg:13.5px; --text-xl:14px; --text-2xl:15px; --text-3xl:21px;
-  --leading-snug:1.5; --leading-normal:1.55; --leading-relaxed:1.6; --leading-loose:1.7;
-  --weight-regular:400; --weight-medium:500; --weight-semibold:600; --weight-bold:700;
-  --tracking-tight:-.01em; --tracking-caps:.08em; --tracking-badge:.09em;
+  /* typography. Self-hosted (static/fonts.css, loaded first); see DESIGN.md.
+     The DESIGN.md scale steps by 3x: --text-sm 13px for mono meta, --text-base
+     16px for body copy and the field, --text-xl 48px for the heading, and
+     --text-display for a page's one headline. The dense controls of this app
+     keep a few smaller steps (--text-3xs to --text-xs, and --text-md for the
+     verdict and its confidence) so the panels stay practical. */
+  --font-display:"Bricolage Grotesque",sans-serif;
+  --font-sans:"IBM Plex Sans",sans-serif;
+  --font-mono:"IBM Plex Mono",monospace;
+  --text-3xs:10.5px; --text-2xs:11px; --text-xs:12px; --text-sm:13px; --text-md:15px;
+  --text-base:16px; --text-xl:48px; --text-display:clamp(64px,14vw,144px);
+  --leading-tight:1; --leading-snug:1.5; --leading-normal:1.55; --leading-relaxed:1.6; --leading-loose:1.7;
+  --weight-regular:400; --weight-semibold:600;
+  --weight-display-light:200; --weight-display:800;   /* display type: these two only */
+  --tracking-tight:-.02em; --tracking-caps:.08em; --tracking-badge:.09em;
 
   /* shape and motion */
   --radius-2xs:2px; --radius-xs:3px; --radius-sm:4px; --radius-md:6px; --radius-lg:7px;
@@ -34,54 +41,56 @@
 
 /* ---- themes. :where(:root) has no specificity, so it is only the fallback for
    an <html> with no theme class or an unknown one; any .theme-* block wins.
-   The verdict colours are semantic: spam is --color-danger, ham is
-   --color-success. The *-subtle backgrounds are opaque: they are the old
-   translucent tints composited over --color-surface, which is what every one
-   of them sits on, so a contrast check reads the colour actually seen. */
+   The thirteen core tokens are the "Spam Classifier" palette (clay + wheat)
+   from the portfolio's design/palettes.json, used as generated. The rest are
+   derived from it: the verdict colours are semantic -- spam is --color-danger,
+   ham is --color-success, a muted green (OKLCH hue 150) set apart from the red
+   by lightness as well as hue -- and their *-subtle backgrounds and *-border
+   edges are low-chroma tints at the same two hues. Every one is opaque, so a
+   contrast check reads the colour actually seen. */
 :where(:root),.theme-dark{
   color-scheme:dark;
-  --color-bg:#0d1117;
-  --color-surface:#131820;              /* the panels */
-  --color-surface-subtle:#0b0f15;       /* inset: the textarea, code */
-  --color-border:#1f2630;               /* hairlines, the confidence track */
-  --color-border-strong:#5b6676;        /* form-field edge: 3:1 on every surface */
-  --color-text-primary:#e6edf3;
-  --color-text-muted:#8b96a5;
-  --color-text-subtle:#7d8896;          /* placeholder */
-  --color-accent:#4da3ff;
-  --color-accent-hover:#7cbcff;
-  --color-accent-subtle:#1a293b;        /* rgba(77,163,255,.12) on the surface */
-  --color-accent-subtle-hover:#1f344d;  /* rgba(77,163,255,.2) on the surface */
-  --color-text-on-accent:#0d1117;
-  --color-danger:#df6a5e;               /* spam, and errors */
-  --color-danger-subtle:#2e2328;
-  --color-danger-border:#462c30;
-  --color-success:#5ec98a;              /* ham */
-  --color-success-subtle:#1d2f2e;
-  --color-success-border:#243f37;
+  --color-bg:#221611;
+  --color-surface:#2D1F19;              /* the panels */
+  --color-surface-subtle:#372721;       /* inset: code */
+  --color-border:#44342D;               /* hairlines, the confidence track */
+  --color-border-strong:#7E6A60;        /* control edges: 3:1 on the page and the panels */
+  --color-text-primary:#EFE6E1;
+  --color-text-muted:#C4B3AC;
+  --color-text-subtle:#B3A097;          /* placeholder */
+  --color-accent:#C6AF71;
+  --color-accent-hover:#DAC68F;
+  --color-accent-subtle:#3B321A;
+  --color-accent-subtle-hover:#423325;  /* the accent at 14% on the surface */
+  --color-text-on-accent:#201A09;
+  --color-danger:#DF7F78;               /* spam, and errors */
+  --color-danger-subtle:#422522;
+  --color-danger-border:#5E3532;
+  --color-success:#91CF9D;              /* ham */
+  --color-success-subtle:#1C3422;
+  --color-success-border:#294B31;
 }
 .theme-light{
   color-scheme:light;
-  --color-bg:#f6f8fa;
-  --color-surface:#ffffff;
-  --color-surface-subtle:#f6f8fa;
-  --color-border:#d8dee4;
-  --color-border-strong:#818b98;
-  --color-text-primary:#1f2328;
-  --color-text-muted:#59636e;
-  --color-text-subtle:#66707b;
-  --color-accent:#075fc6;                /* 4.5:1 on the hover tint too: the text changes
-                                           at once while the tint fades in and out */
-  --color-accent-hover:#0550ae;
-  --color-accent-subtle:#ddf4ff;
-  --color-accent-subtle-hover:#c8e9ff;
-  --color-text-on-accent:#ffffff;
-  --color-danger:#c4362a;
-  --color-danger-subtle:#ffebe9;
-  --color-danger-border:#ffcecb;
-  --color-success:#1a7f37;
-  --color-success-subtle:#dafbe1;
-  --color-success-border:#aceebb;
+  --color-bg:#FDF3EF;
+  --color-surface:#FFFBF8;
+  --color-surface-subtle:#F7EAE4;
+  --color-border:#E6D7D1;
+  --color-border-strong:#9D877D;
+  --color-text-primary:#2F231E;
+  --color-text-muted:#6A564D;
+  --color-text-subtle:#78645B;
+  --color-accent:#7C6628;
+  --color-accent-hover:#645014;
+  --color-accent-subtle:#EEE4CB;
+  --color-accent-subtle-hover:#EAE3D7;  /* the accent at 16% on the surface */
+  --color-text-on-accent:#FDFAF3;
+  --color-danger:#A83634;
+  --color-danger-subtle:#FFE6E3;
+  --color-danger-border:#F4C8C4;
+  --color-success:#20512D;
+  --color-success-subtle:#DFF3E2;
+  --color-success-border:#BEDEC3;
 }
 
   *{box-sizing:border-box;}
@@ -93,11 +102,12 @@
     justify-content:space-between;gap:var(--space-4);}
   .headtext{flex:1;min-width:0;}
   header #themeBtn{flex:none;}
-  h1{font-size:var(--text-3xl);font-weight:var(--weight-semibold);margin:0 0 var(--space-2);
-    letter-spacing:var(--tracking-tight);}
-  h1 em{font-style:normal;color:var(--color-text-muted);font-weight:var(--weight-medium);
-    font-size:var(--text-base);font-family:var(--font-mono);margin-left:var(--space-2);}
-  .sub{color:var(--color-text-muted);font-size:var(--text-lg);max-width:660px;
+  h1{font-family:var(--font-display);font-size:var(--text-xl);font-weight:var(--weight-display);
+    line-height:var(--leading-tight);margin:0 0 var(--space-2);letter-spacing:var(--tracking-tight);}
+  h1 em{font-style:normal;color:var(--color-text-muted);font-weight:var(--weight-regular);
+    font-size:var(--text-sm);font-family:var(--font-mono);margin-left:var(--space-2);
+    letter-spacing:0;vertical-align:middle;white-space:nowrap;}
+  .sub{color:var(--color-text-muted);font-size:var(--text-base);max-width:660px;
     line-height:var(--leading-relaxed);}
 
   .board{display:flex;gap:var(--space-5);align-items:flex-start;flex-wrap:wrap;}
@@ -106,26 +116,36 @@
 
   .section{background:var(--color-surface);border:1px solid var(--color-border);
     border-radius:var(--radius-2xl);padding:var(--space-4);}
-  .section h2{margin:0 0 var(--space-3);font-size:var(--text-2xs);letter-spacing:var(--tracking-caps);
-    text-transform:uppercase;color:var(--color-text-muted);font-weight:var(--weight-semibold);}
+  .section h2{margin:0 0 var(--space-3);font-family:var(--font-display);font-size:var(--text-sm);
+    letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--color-text-muted);
+    font-weight:var(--weight-display);}
 
   /* The field edge is --color-border-strong, not the hairline: a form field's
-     boundary has to reach 3:1 against what is around it. */
-  textarea{width:100%;background:var(--color-surface-subtle);border:1px solid var(--color-border-strong);
+     boundary has to reach 3:1 against what is around it -- on both sides of
+     the line, so the field is filled with the surface it sits on rather than
+     an inset tint the edge would fall under 3:1 against. */
+  textarea{width:100%;background:var(--color-surface);border:1px solid var(--color-border-strong);
     color:var(--color-text-primary);border-radius:var(--radius-xl);padding:var(--space-3);
     font-size:var(--text-base);font-family:inherit;line-height:var(--leading-normal);resize:vertical;}
   textarea:focus{outline:none;border-color:var(--color-accent);}
   textarea::placeholder{color:var(--color-text-subtle);}
 
   .btnrow{display:flex;gap:var(--space-2);margin-top:var(--space-2);flex-wrap:wrap;}
-  button{background:var(--color-accent-subtle);color:var(--color-accent);border:1px solid transparent;
+  /* The primary action is the accent, filled: --color-text-on-accent is the one
+     text colour drawn on it, at rest and hovered. (The accent as text on its own
+     subtle tint is under 4.5:1 in the light theme, so the tint is not a button
+     face.) A secondary button is outlined in --color-border-strong, 3:1 on the
+     page and on a panel, and hovers to the accent's tint under the text colour. */
+  button{background:var(--color-accent);color:var(--color-text-on-accent);border:1px solid var(--color-accent);
     padding:var(--space-2) var(--space-4);border-radius:var(--radius-lg);font-weight:var(--weight-semibold);
-    font-size:var(--text-md);cursor:pointer;transition:background var(--duration) var(--ease);
+    font-size:var(--text-sm);cursor:pointer;transition:background var(--duration) var(--ease);
     font-family:inherit;}
-  button:hover:not(:disabled){background:var(--color-accent-subtle-hover);color:var(--color-accent-hover);}
+  button:hover:not(:disabled){background:var(--color-accent-hover);border-color:var(--color-accent-hover);}
   button:disabled{opacity:.45;cursor:not-allowed;}
-  button.secondary{background:transparent;border:1px solid var(--color-border);color:var(--color-text-primary);}
-  button.secondary:hover:not(:disabled){border-color:var(--color-text-muted);color:var(--color-text-primary);}
+  button.secondary{background:transparent;border:1px solid var(--color-border-strong);color:var(--color-text-primary);}
+  button.secondary:hover:not(:disabled){background:var(--color-accent-subtle-hover);
+    border-color:var(--color-text-muted);color:var(--color-text-primary);}
+  button:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px;}
   .side button{width:100%;margin-top:var(--space-2);}
 
   .hint{font-size:var(--text-xs);color:var(--color-text-muted);margin-top:var(--space-2);
@@ -135,7 +155,7 @@
     border:1px solid var(--color-danger-border);border-radius:var(--radius-md);padding:var(--space-2);}
 
   .verdict{display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-4);flex-wrap:wrap;}
-  .badge{font-size:var(--text-2xl);font-weight:var(--weight-bold);letter-spacing:var(--tracking-badge);
+  .badge{font-size:var(--text-md);font-weight:var(--weight-semibold);letter-spacing:var(--tracking-badge);
     text-transform:uppercase;padding:var(--space-2) var(--space-5);border-radius:var(--radius-xl);
     font-family:var(--font-mono);background:var(--color-border);color:var(--color-text-muted);
     white-space:nowrap;}
@@ -144,20 +164,20 @@
   .confwrap{flex:1;min-width:180px;}
 
   .row{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-2);}
-  .label{font-size:var(--text-md);color:var(--color-text-muted);}
+  .label{font-size:var(--text-sm);color:var(--color-text-muted);}
   .val{font-family:var(--font-mono);color:var(--color-text-primary);font-weight:var(--weight-semibold);
-    font-size:var(--text-xl);}
+    font-size:var(--text-md);font-variant-numeric:tabular-nums;}
   .bar{height:6px;border-radius:var(--radius-xs);background:var(--color-border);overflow:hidden;
     margin-top:var(--space-2);}
   .fill{height:100%;width:0;background:var(--color-accent);transition:width var(--duration-slow) var(--ease);}
   .fill.spam{background:var(--color-danger);}
   .fill.ham{background:var(--color-success);}
 
-  .stat{display:flex;justify-content:space-between;gap:var(--space-3);font-size:var(--text-md);
+  .stat{display:flex;justify-content:space-between;gap:var(--space-3);font-size:var(--text-sm);
     padding:var(--space-2) 0;border-top:1px solid var(--color-border);}
   .stat span{color:var(--color-text-muted);flex:none;}
-  .stat b{font-family:var(--font-mono);font-weight:var(--weight-medium);text-align:right;
-    word-break:break-word;}
+  .stat b{font-family:var(--font-mono);font-weight:var(--weight-regular);text-align:right;
+    word-break:break-word;font-variant-numeric:tabular-nums;}
   .stat b.cleaned{font-size:var(--text-xs);color:var(--color-text-muted);}
 
   .tokens{display:flex;flex-wrap:wrap;gap:var(--space-2);}
@@ -170,7 +190,8 @@
   /* The weight beside each word. It used to be dimmed with opacity:.65, which
      took the spam chip's weight under 4.5:1; the lighter weight and smaller
      size carry the hierarchy now, at full contrast. */
-  .tok i{font-style:normal;font-weight:var(--weight-regular);font-size:var(--text-3xs);}
+  .tok i{font-style:normal;font-weight:var(--weight-regular);font-size:var(--text-3xs);
+    font-variant-numeric:tabular-nums;}
 
   .legendrow{display:flex;gap:var(--space-4);margin-top:var(--space-3);font-size:var(--text-2xs);
     color:var(--color-text-muted);}
@@ -189,7 +210,7 @@
   table.batch td.v.spam{color:var(--color-danger);}
   table.batch td.v.ham{color:var(--color-success);}
   table.batch td.c{width:56px;text-align:right;color:var(--color-text-muted);
-    font-family:var(--font-mono);font-size:var(--text-2xs);}
+    font-family:var(--font-mono);font-size:var(--text-2xs);font-variant-numeric:tabular-nums;}
   table.batch td.m{color:var(--color-text-primary);line-height:var(--leading-snug);word-break:break-word;}
 
   .samples{list-style:none;margin:0;padding:0;}

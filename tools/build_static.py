@@ -7,7 +7,9 @@ Why a script rather than a second copy of the page: the page in docs/app/ *is*
 the page. Its textarea, its verdict badge, its confidence bar, its token chips
 and its sample list all come from the same `templates/index.html`,
 `static/css/style.css` and `static/js/app.js` the Flask app serves -- copied
-here byte for byte and never edited. A hand-maintained fork of app.js is a
+here byte for byte and never edited, along with the self-hosted type in
+`static/fonts.css` and `static/fonts/` (woff2 files and their OFL licences),
+so the page asks no other server for anything. A hand-maintained fork of app.js is a
 fork that looks like a copy, and it rots the first time somebody fixes a bug
 in one of them.
 
@@ -163,9 +165,19 @@ def read(path):
 
 
 def write(path, text):
+    """Write a file of the bundle: text as LF UTF-8, bytes (the fonts) as is."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    if isinstance(text, bytes):
+        with io.open(path, "wb") as handle:
+            handle.write(text)
+        return
     with io.open(path, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(text)
+
+
+def read_bytes(path):
+    with io.open(path, "rb") as handle:
+        return handle.read()
 
 
 def stop(message):
@@ -934,10 +946,13 @@ def page_html(template, payload):
     text = replace_once(
         text,
         "<link rel=\"stylesheet\" href=\"{{ url_for('static', "
+        "filename='fonts.css') }}\">\n"
+        "<link rel=\"stylesheet\" href=\"{{ url_for('static', "
         "filename='css/style.css') }}\">",
+        '<link rel="stylesheet" href="fonts.css">\n'
         '<link rel="stylesheet" href="css/style.css">\n'
         '<link rel="stylesheet" href="css/static.css">',
-        "point the stylesheet at the copied CSS")
+        "point the stylesheets at the copied fonts and CSS")
 
     text = replace_once(
         text,
@@ -1030,6 +1045,13 @@ def collect(payload):
         BANNER % "static/css/style.css"
         + read(os.path.join(ROOT, "static", "css", "style.css")))
     written["css/static.css"] = read(os.path.join(SRC, "css", "static.css"))
+    # The type, unchanged: fonts.css's url()s are relative to it, so it and
+    # fonts/ keep the layout they have under static/. Bytes, not text -- the
+    # woff2 files are binary, and the licences are copied exactly as shipped.
+    written["fonts.css"] = read_bytes(os.path.join(ROOT, "static", "fonts.css"))
+    for name in sorted(os.listdir(os.path.join(ROOT, "static", "fonts"))):
+        written["fonts/" + name] = read_bytes(
+            os.path.join(ROOT, "static", "fonts", name))
     written["index.html"] = page_html(
         read(os.path.join(ROOT, "templates", "index.html")), payload)
     return written
@@ -1044,7 +1066,7 @@ def sizes(written):
     """
     rows = []
     for name, body in sorted(written.items()):
-        raw = body.encode("utf-8")
+        raw = body if isinstance(body, bytes) else body.encode("utf-8")
         rows.append((name, len(raw), len(gzip.compress(raw, 9))))
     return rows
 
@@ -1080,9 +1102,9 @@ def main(argv):
     rows = sizes(written)
     print("wrote %d files to docs/app" % len(rows))
     for name, raw, packed in rows:
-        print("  %-22s %7.1f KB  %6.1f KB gzipped"
+        print("  %-44s %7.1f KB  %6.1f KB gzipped"
               % (name, raw / 1024.0, packed / 1024.0))
-    print("  %-22s %7.1f KB  %6.1f KB gzipped"
+    print("  %-44s %7.1f KB  %6.1f KB gzipped"
           % ("total", sum(r[1] for r in rows) / 1024.0,
              sum(r[2] for r in rows) / 1024.0))
     print("  serve it:  python -m http.server -d docs 8000  ->  "

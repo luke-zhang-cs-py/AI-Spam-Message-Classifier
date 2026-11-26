@@ -47,6 +47,15 @@ from pipeline import spamlib                              # noqa: E402
 
 TEMPLATE = os.path.join(ROOT, "templates", "index.html")
 
+# The self-hosted type the bundle carries, copied from static/ unchanged.
+FONTS = ["fonts.css", "fonts/OFL-Bricolage-Grotesque.txt",
+         "fonts/OFL-IBM-Plex.txt",
+         "fonts/bricolage-grotesque-latin-wght.woff2",
+         "fonts/ibm-plex-mono-latin-400.woff2",
+         "fonts/ibm-plex-mono-latin-600.woff2",
+         "fonts/ibm-plex-sans-latin-400.woff2",
+         "fonts/ibm-plex-sans-latin-600.woff2"]
+
 
 # --------------------------------------------------------------- fixtures
 
@@ -273,6 +282,10 @@ def test_write_creates_the_directory_and_writes_lf_utf8(tmp_path):
     target = tmp_path / "deep" / "er" / "file.js"
     build.write(str(target), "café\nline two\n")
     assert target.read_bytes() == "café\nline two\n".encode("utf-8")
+    # Bytes -- a font -- are written as they are, CR and NUL included.
+    font = tmp_path / "fonts" / "f.woff2"
+    build.write(str(font), b"wOF2\x00\r\n\xff")
+    assert font.read_bytes() == b"wOF2\x00\r\n\xff"
     assert build.read(str(target)) == "café\nline two\n"
 
 
@@ -759,8 +772,11 @@ def test_the_page_is_the_flask_template_with_the_server_taken_out():
                "terms": ["t"] * 10}
     html = build.page_html(build.read(TEMPLATE), payload)
     assert "<title>Spam Classifier — browser build</title>" in html
+    assert '<link rel="stylesheet" href="fonts.css">' in html
     assert '<link rel="stylesheet" href="css/style.css">' in html
     assert '<link rel="stylesheet" href="css/static.css">' in html
+    assert html.index('href="fonts.css"') < html.index('href="css/style.css"')
+    assert "fonts.googleapis.com" not in html, "the type is self-hosted"
     assert "This is the browser-only build." in html
     assert "Inference only: this page carries the numbers" in html
     assert "{{" not in html and "{%" not in html
@@ -781,10 +797,13 @@ def test_the_bundle_copies_the_flask_files_byte_for_byte():
     payload = {"chosen": "NB", "threshold": 0.5, "terms": ["a"],
                "metrics": {"testSize": 1}}
     written = build.collect(payload)
-    assert sorted(written) == ["css/static.css", "css/style.css",
-                               "index.html", "js/app.js", "js/model-data.js",
-                               "js/spam.js", "js/static-api.js",
-                               "js/static-ui.js"]
+    assert sorted(written) == sorted(
+        ["css/static.css", "css/style.css", "index.html", "js/app.js",
+         "js/model-data.js", "js/spam.js", "js/static-api.js",
+         "js/static-ui.js"] + FONTS)
+    for name in FONTS:
+        with open(os.path.join(ROOT, "static", *name.split("/")), "rb") as f:
+            assert written[name] == f.read(), name
     app_js = build.read(os.path.join(ROOT, "static", "js", "app.js"))
     assert written["js/app.js"] == build.BANNER % "static/js/app.js" + app_js
     for name in build.STATIC_JS:
@@ -858,7 +877,7 @@ def test_the_build_checks_the_port_then_writes_docs_app(
     assert "over %d messages..." % messages in printed
     assert "clean_text == cleanText            %d messages" % messages in printed
     assert "proving" not in printed, "--prove ran without being asked"
-    assert "wrote 8 files to docs/app" in printed
+    assert "wrote 16 files to docs/app" in printed
     assert "removed stale %s" % os.path.join("js", "old.js") in printed
     assert browser.closed
 
@@ -866,9 +885,14 @@ def test_the_build_checks_the_port_then_writes_docs_app(
                        .replace("\\", "/")
                        for here, _, names in os.walk(str(out))
                        for name in names)
-    assert published == ["css/static.css", "css/style.css", "index.html",
-                         "js/app.js", "js/model-data.js", "js/spam.js",
-                         "js/static-api.js", "js/static-ui.js"]
+    assert published == sorted(
+        ["css/static.css", "css/style.css", "index.html", "js/app.js",
+         "js/model-data.js", "js/spam.js", "js/static-api.js",
+         "js/static-ui.js"] + FONTS)
+    with open(os.path.join(ROOT, "static", "fonts",
+                           "bricolage-grotesque-latin-wght.woff2"), "rb") as f:
+        assert (out / "fonts" / "bricolage-grotesque-latin-wght.woff2"
+                ).read_bytes() == f.read(), "a font is copied byte for byte"
 
     data = build.read(str(out / "js" / "model-data.js"))
     payload = json.loads(data.split("const SPAM_MODEL_DATA = ", 1)[1]
@@ -887,4 +911,4 @@ def test_the_build_with_prove_breaks_the_real_bundle_six_ways(
     printed = capsys.readouterr().out
     assert "proving the comparison is not vacuous..." in printed
     assert "all 6 caught" in printed
-    assert "wrote 8 files to docs/app" in printed
+    assert "wrote 16 files to docs/app" in printed

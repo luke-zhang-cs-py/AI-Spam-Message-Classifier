@@ -15,8 +15,7 @@
     if (/^[a-z]+$/.test(saved)) document.documentElement.classList.replace('theme-dark', 'theme-' + saved);
   })();
 </script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='fonts.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -61,7 +60,7 @@
         <div class="stat"><span>Recognised words</span><b id="knownTokens">&mdash;</b></div>
         <div class="stat"><span>After cleaning</span><b class="cleaned" id="cleaned">&mdash;</b></div>
 
-        <h2 style="margin-top:18px;">What drove it</h2>
+        <h2 style="margin-top:var(--space-4);">What drove it</h2>
         <div class="tokens" id="tokens"></div>
         <div class="legendrow">
           <span><i class="sw spam"></i>pushes spam</span>
